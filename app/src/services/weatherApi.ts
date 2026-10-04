@@ -710,10 +710,11 @@ export async function fetchAggregatedWeatherDirect(
 	const minDiff = openMeteoJma.minTempDiff;
 	const pop = openMeteoJma.popMax;
 
+	const formatTemperature = (temp: number) => `${temp.toFixed(1)}℃`;
 	const formatDiff = (diff: number) => {
-		if (diff > 0) return `+${diff}`;
-		if (diff < 0) return `${diff}`;
-		return `0`;
+		if (diff > 0) return `+${diff.toFixed(1)}`;
+		if (diff < 0) return `${diff.toFixed(1)}`;
+		return `0.0`;
 	};
 	const rawClothingAdvice = getClothingAdvice(maxTemp, minTemp, maxDiff);
 	const clothingAdvice = rawClothingAdvice
@@ -725,7 +726,7 @@ export async function fetchAggregatedWeatherDirect(
 
 	// 本文: 気温（最高・最低と前日差を重複なく1行で対比）＋ 服装目安 ＋ 注意報
 	const bodyLines: string[] = [
-		`${maxTemp}℃ (${formatDiff(maxDiff)}) / ${minTemp}℃ (${formatDiff(minDiff)})`,
+		`${formatTemperature(maxTemp)} (${formatDiff(maxDiff)}) / ${formatTemperature(minTemp)} (${formatDiff(minDiff)})`,
 	];
 	if (clothingAdvice) {
 		bodyLines.push(`${clothingAdvice}`);
