@@ -79,17 +79,25 @@ function resolveDayDisplayData(
 			? openMeteoJma.precipitationSum
 			: openMeteoJma.tomorrowPrecipitationSum;
 
+		const todayBaselineMax = jma.todayMaxTemp ?? openMeteoJma.maxTemp;
+		const todayBaselineMin = jma.todayMinTemp ?? openMeteoJma.minTemp;
+
+		const maxDiff = isToday
+			? Math.round((todayBaselineMax - openMeteoJma.prevMaxTemp) * 10) /
+				10
+			: Math.round((baselineMax - todayBaselineMax) * 10) / 10;
+		const minDiff = isToday
+			? Math.round((todayBaselineMin - openMeteoJma.prevMinTemp) * 10) /
+				10
+			: Math.round((baselineMin - todayBaselineMin) * 10) / 10;
+
 		return {
 			icon: getWeatherIcon(rawWeather),
 			weatherText: rawWeather,
 			maxTemp: baselineMax,
 			minTemp: baselineMin,
-			maxDiff: isToday
-				? openMeteoJma.maxTempDiff
-				: openMeteoJma.tomorrowMaxTempDiff,
-			minDiff: isToday
-				? openMeteoJma.minTempDiff
-				: openMeteoJma.tomorrowMinTempDiff,
+			maxDiff,
+			minDiff,
 			popText,
 			precipText: precip !== undefined ? `${precip}mm` : "0mm",
 			apparentMaxTemp,
@@ -170,10 +178,30 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 		const isToday = selectedDay === "today";
 		const active = isToday ? today : tomorrow;
 
-		const formatDiff = (diff: number, prefix: string) => {
-			if (diff > 0) return `${prefix}+${diff.toFixed(1)}°`;
-			if (diff < 0) return `${prefix}${diff.toFixed(1)}°`;
-			return `${prefix}±0°`;
+		const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+		const now = new Date();
+		const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+		const todayDateLabel = `${jstNow.getUTCMonth() + 1}/${jstNow.getUTCDate()}(${weekdays[jstNow.getUTCDay()]})`;
+
+		const jstTomorrow = new Date(jstNow.getTime() + 24 * 60 * 60 * 1000);
+		const tomorrowDateLabel = `${jstTomorrow.getUTCMonth() + 1}/${jstTomorrow.getUTCDate()}(${weekdays[jstTomorrow.getUTCDay()]})`;
+
+		const formatTemp = (temp?: number) => {
+			if (temp === undefined || isNaN(temp)) return "--℃";
+			const rounded = Math.round(temp * 10) / 10;
+			return Number.isInteger(rounded)
+				? `${rounded}℃`
+				: `${rounded.toFixed(1)}℃`;
+		};
+
+		const formatDiff = (diff: number, prefix: string = "") => {
+			const rounded = Math.round(diff * 10) / 10;
+			const valStr = Number.isInteger(rounded)
+				? `${rounded}`
+				: rounded.toFixed(1);
+			if (rounded > 0) return `${prefix}+${valStr}℃`;
+			if (rounded < 0) return `${prefix}${valStr}℃`;
+			return `${prefix}±0℃`;
 		};
 
 		const diffColor = (diff: number) => {
@@ -186,7 +214,6 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 			<Section style={styles.sectionContainer}>
 				{/* 上部: 予報モデル切り替えピル */}
 				<View style={styles.headerRow}>
-					<Text style={styles.headerTitle}>天気予報</Text>
 					<View style={styles.modelSelector}>
 						<Pressable
 							style={[
@@ -204,7 +231,7 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 										styles.modelPillTextActive,
 								]}
 							>
-								気象庁公式
+								気象庁
 							</Text>
 						</Pressable>
 						<Pressable
@@ -275,50 +302,62 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 								>
 									今日
 								</Text>
+								<Text
+									style={[
+										styles.cardDateLabel,
+										isToday && styles.cardDateLabelActive,
+									]}
+								>
+									{todayDateLabel}
+								</Text>
 							</View>
-							{isToday && (
-								<View style={styles.selectedIndicator}>
-									<Text style={styles.selectedIndicatorText}>
-										選択中
-									</Text>
-								</View>
-							)}
 						</View>
 
 						<View style={styles.cardCenterRow}>
 							<Text style={styles.cardWeatherIcon}>
 								{today.icon}
 							</Text>
-							<View style={styles.cardTempGroup}>
-								<View style={styles.cardTempRow}>
+							<View style={styles.cardTempCols}>
+								<View style={styles.cardTempCol}>
 									<Text style={styles.cardMaxTemp}>
-										{today.maxTemp.toFixed(1)}°
+										{formatTemp(today.maxTemp)}
 									</Text>
-									<Text style={styles.cardTempSlash}>/</Text>
-									<Text style={styles.cardMinTemp}>
-										{today.minTemp.toFixed(1)}°
+									<Text style={styles.cardDiffText}>
+										{formatDiff(today.maxDiff)}
 									</Text>
 								</View>
-								<Text
-									style={[
-										styles.cardDiffText,
-										{ color: diffColor(today.maxDiff) },
-									]}
-								>
-									前日比 高{formatDiff(today.maxDiff, "")} 低
-									{formatDiff(today.minDiff, "")}
-								</Text>
+								<Text style={styles.cardTempSlash}>/</Text>
+								<View style={styles.cardTempCol}>
+									<Text style={styles.cardMinTemp}>
+										{formatTemp(today.minTemp)}
+									</Text>
+									<Text style={styles.cardDiffText}>
+										{formatDiff(today.minDiff)}
+									</Text>
+								</View>
 							</View>
 						</View>
 
-						<View style={styles.cardBottomRow}>
-							<Text style={styles.cardPrecipStat}>
-								☂ {today.popText}
-							</Text>
-							<Text style={styles.cardPrecipDivider}>・</Text>
-							<Text style={styles.cardPrecipStat}>
-								{today.precipText}
-							</Text>
+						<View style={styles.cardMetaBlock}>
+							{today.apparentMaxTemp !== undefined &&
+								today.apparentMinTemp !== undefined && (
+									<View style={styles.cardMetaRow}>
+										<Text style={styles.cardMetaLabel}>
+											体感
+										</Text>
+										<Text style={styles.cardMetaValue}>
+											{formatTemp(today.apparentMaxTemp)}{" "}
+											/{" "}
+											{formatTemp(today.apparentMinTemp)}
+										</Text>
+									</View>
+								)}
+							<View style={styles.cardMetaRow}>
+								<Text style={styles.cardMetaLabel}>降水</Text>
+								<Text style={styles.cardMetaValue}>
+									☂ {today.popText} ({today.precipText})
+								</Text>
+							</View>
 						</View>
 					</Pressable>
 
@@ -347,78 +386,85 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 								>
 									明日
 								</Text>
+
+								<Text
+									style={[
+										styles.cardDateLabel,
+										!isToday && styles.cardDateLabelActive,
+									]}
+								>
+									{tomorrowDateLabel}
+								</Text>
 							</View>
-							{!isToday && (
-								<View style={styles.selectedIndicator}>
-									<Text style={styles.selectedIndicatorText}>
-										選択中
-									</Text>
-								</View>
-							)}
 						</View>
 
 						<View style={styles.cardCenterRow}>
 							<Text style={styles.cardWeatherIcon}>
 								{tomorrow.icon}
 							</Text>
-							<View style={styles.cardTempGroup}>
-								<View style={styles.cardTempRow}>
+							<View style={styles.cardTempCols}>
+								<View style={styles.cardTempCol}>
 									<Text style={styles.cardMaxTemp}>
-										{tomorrow.maxTemp.toFixed(1)}°
+										{formatTemp(tomorrow.maxTemp)}
 									</Text>
-									<Text style={styles.cardTempSlash}>/</Text>
-									<Text style={styles.cardMinTemp}>
-										{tomorrow.minTemp.toFixed(1)}°
+									<Text style={styles.cardDiffText}>
+										{formatDiff(tomorrow.maxDiff)}
 									</Text>
 								</View>
-								<Text
-									style={[
-										styles.cardDiffText,
-										{ color: diffColor(tomorrow.maxDiff) },
-									]}
-								>
-									今日比 高{formatDiff(tomorrow.maxDiff, "")}{" "}
-									低{formatDiff(tomorrow.minDiff, "")}
-								</Text>
+								<Text style={styles.cardTempSlash}>/</Text>
+								<View style={styles.cardTempCol}>
+									<Text style={styles.cardMinTemp}>
+										{formatTemp(tomorrow.minTemp)}
+									</Text>
+									<Text style={styles.cardDiffText}>
+										{formatDiff(tomorrow.minDiff)}
+									</Text>
+								</View>
 							</View>
 						</View>
 
-						<View style={styles.cardBottomRow}>
-							<Text style={styles.cardPrecipStat}>
-								☂ {tomorrow.popText}
-							</Text>
-							<Text style={styles.cardPrecipDivider}>・</Text>
-							<Text style={styles.cardPrecipStat}>
-								{tomorrow.precipText}
-							</Text>
+						<View style={styles.cardMetaBlock}>
+							{tomorrow.apparentMaxTemp !== undefined &&
+								tomorrow.apparentMinTemp !== undefined && (
+									<View style={styles.cardMetaRow}>
+										<Text style={styles.cardMetaLabel}>
+											体感
+										</Text>
+										<Text style={styles.cardMetaValue}>
+											{formatTemp(
+												tomorrow.apparentMaxTemp,
+											)}{" "}
+											/{" "}
+											{formatTemp(
+												tomorrow.apparentMinTemp,
+											)}
+										</Text>
+									</View>
+								)}
+							<View style={styles.cardMetaRow}>
+								<Text style={styles.cardMetaLabel}>降水</Text>
+								<Text style={styles.cardMetaValue}>
+									☂ {tomorrow.popText} ({tomorrow.precipText})
+								</Text>
+							</View>
 						</View>
 					</Pressable>
 				</View>
 
-				{/* 共通詳細エリア（選択中日の概況文言・体感・公式比・服装目安） */}
+				{/* 共通詳細エリア（選択中日の概況文言・公式比・服装目安） */}
 				<View style={styles.sharedDetailArea}>
-					{/* 天気概況文言（小さめ） */}
+					{/* 天気概況文言 */}
 					<View style={styles.weatherSummaryRow}>
-						<Text style={styles.summaryIcon}>{active.icon}</Text>
 						<Text style={styles.summaryText} numberOfLines={2}>
 							{active.weatherText}
 						</Text>
-						{active.apparentMaxTemp !== undefined &&
-							active.apparentMinTemp !== undefined && (
-								<Text style={styles.apparentTempTag}>
-									体感 {active.apparentMaxTemp.toFixed(1)}° /{" "}
-									{active.apparentMinTemp.toFixed(1)}°
-								</Text>
-							)}
 					</View>
 
 					{/* 気象庁公式との差異注記（モデル選択時） */}
 					{active.maxDiffVsJma !== undefined &&
 						active.minDiffVsJma !== undefined && (
 							<View style={styles.modelDiffRow}>
-								<Text style={styles.modelDiffLabel}>
-									気象庁公式比
-								</Text>
+								<Text style={styles.adviceLabel}>気象庁比</Text>
 								<Text
 									style={[
 										styles.modelDiffVal,
@@ -478,6 +524,7 @@ const styles = StyleSheet.create({
 	},
 	modelSelector: {
 		flexDirection: "row",
+		marginLeft: "auto",
 		gap: 4,
 	},
 	modelPill: {
@@ -507,7 +554,7 @@ const styles = StyleSheet.create({
 	dayCard: {
 		flex: 1,
 		borderRadius: 14,
-		padding: 12,
+		padding: 10,
 		borderWidth: 2,
 	},
 	dayCardActive: {
@@ -528,23 +575,33 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		marginBottom: 8,
+		marginBottom: 6,
 	},
 	dayBadge: {
-		paddingHorizontal: 8,
+		paddingHorizontal: 7,
 		paddingVertical: 2,
-		borderRadius: 6,
+		borderRadius: 5,
 		backgroundColor: "#E2E8F0",
+		flexDirection: "row",
+		gap: 1,
 	},
 	dayBadgeActive: {
 		backgroundColor: "#2563EB",
 	},
 	dayBadgeText: {
-		fontSize: 12,
+		fontSize: 11.5,
 		fontWeight: "700",
 		color: "#475569",
 	},
 	dayBadgeTextActive: {
+		color: "#FFFFFF",
+	},
+	cardDateLabel: {
+		fontSize: 11.5,
+		fontWeight: "600",
+		color: "#475569",
+	},
+	cardDateLabelActive: {
 		color: "#FFFFFF",
 	},
 	selectedIndicator: {
@@ -561,57 +618,69 @@ const styles = StyleSheet.create({
 	cardCenterRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 8,
-		marginVertical: 4,
+		justifyContent: "space-between",
+		marginVertical: 2,
 	},
 	cardWeatherIcon: {
-		fontSize: 34,
+		fontSize: 28,
 	},
-	cardTempGroup: {
-		flex: 1,
-	},
-	cardTempRow: {
+	cardTempCols: {
 		flexDirection: "row",
-		alignItems: "baseline",
-		gap: 3,
+		alignItems: "flex-start",
+		justifyContent: "flex-end",
+		gap: 6,
+	},
+	cardTempCol: {
+		alignItems: "flex-end",
 	},
 	cardMaxTemp: {
-		fontSize: 18,
+		fontSize: 16.5,
 		fontWeight: "800",
 		color: "#E11D48",
+		letterSpacing: -0.5,
+		lineHeight: 20,
 	},
 	cardTempSlash: {
-		fontSize: 13,
+		fontSize: 14,
+		fontWeight: "400",
 		color: "#94A3B8",
-		fontWeight: "500",
-	},
-	cardMinTemp: {
-		fontSize: 16,
-		fontWeight: "800",
-		color: "#2563EB",
-	},
-	cardDiffText: {
-		fontSize: 9.5,
-		fontWeight: "700",
 		marginTop: 1,
 	},
-	cardBottomRow: {
+	cardMinTemp: {
+		fontSize: 16.5,
+		fontWeight: "800",
+		color: "#2563EB",
+		letterSpacing: -0.5,
+		lineHeight: 20,
+	},
+	cardDiffText: {
+		fontSize: 10,
+		fontWeight: "600",
+		color: "#64748B",
+		marginTop: 0,
+		lineHeight: 13,
+	},
+	cardMetaBlock: {
+		marginTop: 6,
+		paddingTop: 5,
+		borderTopWidth: 1,
+		borderTopColor: "rgba(226, 232, 240, 0.8)",
+		gap: 2,
+	},
+	cardMetaRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 4,
-		marginTop: 6,
-		paddingTop: 6,
-		borderTopWidth: 1,
-		borderTopColor: "rgba(226, 232, 240, 0.7)",
+		justifyContent: "space-between",
 	},
-	cardPrecipStat: {
-		fontSize: 11,
+	cardMetaLabel: {
+		fontSize: 10,
+		fontWeight: "700",
+		color: "#64748B",
+	},
+	cardMetaValue: {
+		fontSize: 10.5,
 		fontWeight: "600",
-		color: "#475569",
-	},
-	cardPrecipDivider: {
-		fontSize: 9,
-		color: "#CBD5E1",
+		color: "#334155",
 	},
 	sharedDetailArea: {
 		marginTop: 12,
@@ -636,17 +705,6 @@ const styles = StyleSheet.create({
 		fontWeight: "600",
 		color: "#334155",
 		lineHeight: 17,
-	},
-	apparentTempTag: {
-		fontSize: 11,
-		fontWeight: "600",
-		color: "#64748B",
-		backgroundColor: "#FFFFFF",
-		paddingHorizontal: 6,
-		paddingVertical: 2,
-		borderRadius: 4,
-		borderWidth: 1,
-		borderColor: "#E2E8F0",
 	},
 	modelDiffRow: {
 		flexDirection: "row",

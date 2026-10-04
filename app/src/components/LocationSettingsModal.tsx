@@ -8,7 +8,9 @@ import {
 	Pressable,
 	ScrollView,
 	ActivityIndicator,
+	useWindowDimensions,
 } from "react-native";
+import { useUiScale } from "../context/UiScaleContext";
 import { CityConfig } from "../types";
 import { CITIES } from "../constants/cities";
 import { searchLocationsOnline } from "../services/geocoding";
@@ -42,6 +44,8 @@ export const LocationSettingsModal: React.FC<Props> = ({
 	onClose,
 	onSave,
 }) => {
+	const { uiScale } = useUiScale();
+	const { width: windowWidth } = useWindowDimensions();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedRegion, setSelectedRegion] = useState("すべて");
 	const [savedCities, setSavedCities] = useState<CityConfig[]>([]);
@@ -132,7 +136,17 @@ export const LocationSettingsModal: React.FC<Props> = ({
 		>
 			<View style={styles.overlay}>
 				<Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-				<View style={styles.modalContainer}>
+				<View
+					style={[
+						styles.modalContainer,
+						uiScale !== 1.0 && {
+							width: windowWidth / uiScale,
+							maxHeight: `${Math.min(95, 90 / uiScale)}%` as any,
+							transform: [{ scale: uiScale }],
+							transformOrigin: "bottom left",
+						},
+					]}
+				>
 					{/* ヘッダー */}
 					<View style={styles.header}>
 						<View>

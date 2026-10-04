@@ -9,7 +9,9 @@ import {
 	Linking,
 	Alert,
 	Switch,
+	useWindowDimensions,
 } from "react-native";
+import { useUiScale } from "../context/UiScaleContext";
 import { NotificationPayload, CityConfig } from "../types";
 import {
 	sendLocalNotificationAsync,
@@ -48,6 +50,10 @@ export const SettingsModal: React.FC<Props> = React.memo(
 		const [tomorrowEnabled, setTomorrowEnabled] = useState(false);
 		const [tomorrowStartHour, setTomorrowStartHour] = useState<number>(18);
 		const [tomorrowStatusText, setTomorrowStatusText] = useState("");
+
+		// 画面表示倍率 (Context 連動)
+		const { uiScale, changeUiScale, resetUiScale } = useUiScale();
+		const { width: windowWidth } = useWindowDimensions();
 
 		// 初期設定の読み込み
 		const loadSettings = useCallback(async () => {
@@ -222,7 +228,17 @@ export const SettingsModal: React.FC<Props> = React.memo(
 						onPress={onClose}
 						activeOpacity={1}
 					/>
-					<View style={styles.container}>
+					<View
+						style={[
+							styles.container,
+							uiScale !== 1.0 && {
+								width: windowWidth / uiScale,
+								maxHeight: `${Math.min(95, 85 / uiScale)}%` as any,
+								transform: [{ scale: uiScale }],
+								transformOrigin: "bottom left",
+							},
+						]}
+					>
 						{/* ヘッダー */}
 						<View style={styles.header}>
 							<Text style={styles.title}>設定</Text>
@@ -272,7 +288,114 @@ export const SettingsModal: React.FC<Props> = React.memo(
 								</TouchableOpacity>
 							</View>
 
-							{/* セクション 2: 通知設定 */}
+							{/* セクション 2: 表示サイズ */}
+							<View style={styles.section}>
+								<Text style={styles.sectionTitle}>
+									表示サイズ
+								</Text>
+								<View style={styles.settingCard}>
+									<View style={styles.cardHeaderRow}>
+										<View style={styles.cardHeaderInfo}>
+											<Text style={styles.cardTitle}>
+												画面倍率（文字全体）
+											</Text>
+											<Text
+												style={styles.cardDescription}
+											>
+												アプリ全体の文字サイズを一括で調整します
+											</Text>
+										</View>
+									</View>
+
+									<View style={styles.cardSubContent}>
+										<View style={styles.inlineSentenceRow}>
+											<View
+												style={styles.stepperContainer}
+											>
+												<TouchableOpacity
+													style={[
+														styles.stepButton,
+														uiScale <= 0.85 &&
+															styles.stepButtonDisabled,
+													]}
+													onPress={() =>
+														changeUiScale(-0.05)
+													}
+													disabled={uiScale <= 0.85}
+												>
+													<Text
+														style={
+															styles.stepButtonText
+														}
+													>
+														−
+													</Text>
+												</TouchableOpacity>
+												<View
+													style={styles.stepValueBox}
+												>
+													<Text
+														style={
+															styles.stepValueText
+														}
+													>
+														{Math.round(
+															uiScale * 100,
+														)}
+														%
+													</Text>
+												</View>
+												<TouchableOpacity
+													style={[
+														styles.stepButton,
+														uiScale >= 1.4 &&
+															styles.stepButtonDisabled,
+													]}
+													onPress={() =>
+														changeUiScale(0.05)
+													}
+													disabled={uiScale >= 1.4}
+												>
+													<Text
+														style={
+															styles.stepButtonText
+														}
+													>
+														＋
+													</Text>
+												</TouchableOpacity>
+											</View>
+											<Text
+												style={
+													styles.inlineSentenceText
+												}
+											>
+												で表示中
+											</Text>
+										</View>
+
+										{uiScale !== 1.0 && (
+											<View style={styles.subRowBetween}>
+												<View />
+												<TouchableOpacity
+													style={styles.resetButton}
+													onPress={resetUiScale}
+												>
+													<Text
+														style={
+															styles.resetButtonText
+														}
+													>
+														標準 (100%) に戻す
+													</Text>
+												</TouchableOpacity>
+											</View>
+										)}
+									</View>
+								</View>
+							</View>
+
+							{/* セクション 3: 通知設定 */}
 							<View style={styles.section}>
 								<Text style={styles.sectionTitle}>
 									通知設定

@@ -241,7 +241,7 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 														styles.tempTextCurrent,
 												]}
 											>
-												{Math.round(item.temp)}°
+												{Math.round(item.temp)}℃
 											</Text>
 										</View>
 

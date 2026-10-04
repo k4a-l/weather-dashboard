@@ -279,49 +279,56 @@ export async function fetchJmaDirect(
 						.map((t: string) => parseFloat(t))
 						.filter((t: number) => !isNaN(t));
 
-					// 気象庁の日時 "YYYY-MM-DDTHH:mm:ss+09:00" から JST発表時（時）を確実に抽出
-					const hourMatch = reportDatetime.match(/T(\d{2}):/);
-					const reportHour = hourMatch
-						? parseInt(hourMatch[1], 10)
-						: (new Date(reportDatetime).getUTCHours() + 9) % 24;
+					const timeDefines: string[] = tempSeries.timeDefines || [];
+					const now = new Date();
+					const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+					const currentTodayStr = jstNow.toISOString().split("T")[0];
+					const jstTom = new Date(
+						jstNow.getTime() + 24 * 60 * 60 * 1000,
+					);
+					const currentTomorrowStr = jstTom
+						.toISOString()
+						.split("T")[0];
 
-					if (temps.length >= 4) {
-						if (reportHour >= 10 && reportHour < 16) {
-							// 11時発表: [0]: 今日の日中最高, [1]: 今日の最高, [2]: 明日の朝最低, [3]: 明日の日中最高
-							// 今日の最低気温は朝を過ぎており短期予報に含まれないため、undefined（数値モデル等で補完）
-							todayMaxTemp = temps[0];
-							tomorrowMinTemp = temps[2];
-							tomorrowMaxTemp = temps[3];
-						} else if (reportHour < 10) {
-							// 5時発表: [0]: 今日の朝最低, [1]: 今日の日中最高, [2]: 明日の朝最低, [3]: 明日の日中最高
-							if (temps[0] !== temps[1]) {
-								todayMinTemp = temps[0];
-								todayMaxTemp = temps[1];
-							} else {
-								todayMaxTemp = temps[0];
+					if (timeDefines.length > 0) {
+						for (
+							let i = 0;
+							i < timeDefines.length && i < temps.length;
+							i++
+						) {
+							const dStr = timeDefines[i].split("T")[0];
+							const timePart = timeDefines[i].split("T")[1] || "";
+							const hour = parseInt(timePart.slice(0, 2), 10);
+							const val = temps[i];
+
+							if (dStr === currentTodayStr) {
+								if (hour < 9) {
+									todayMinTemp = val;
+								} else {
+									todayMaxTemp = val;
+								}
+							} else if (dStr === currentTomorrowStr) {
+								if (hour < 9) {
+									tomorrowMinTemp = val;
+								} else {
+									tomorrowMaxTemp = val;
+								}
 							}
+						}
+					} else {
+						// timeDefinesが存在しない場合のフォールバック
+						if (temps.length >= 4) {
+							todayMinTemp = temps[0];
+							todayMaxTemp = temps[1];
 							tomorrowMinTemp = temps[2];
 							tomorrowMaxTemp = temps[3];
-						} else {
-							// 17時発表以降
-							tomorrowMinTemp = temps[0];
-							tomorrowMaxTemp = temps[1];
-						}
-					} else if (temps.length === 3) {
-						todayMaxTemp = temps[0];
-						tomorrowMinTemp = temps[1];
-						tomorrowMaxTemp = temps[2];
-					} else if (temps.length === 2) {
-						if (reportHour >= 16) {
-							tomorrowMinTemp = temps[0];
-							tomorrowMaxTemp = temps[1];
-						} else {
-							todayMaxTemp = temps[0];
-							tomorrowMinTemp = temps[1];
+						} else if (temps.length === 2) {
+							todayMinTemp = temps[0];
+							todayMaxTemp = temps[1];
 						}
 					}
 
-					// 最高気温と最低気温が同値になる現象（最低気温への最高気温重複混入）の完全防止
+					// 最高気温と最低気温が同値になる現象の防止
 					if (
 						todayMinTemp !== undefined &&
 						todayMaxTemp !== undefined &&
@@ -405,11 +412,11 @@ export async function fetchJmaDirect(
 	}
 
 	// 今日・明日の公式短期予報を週間予報リストの先頭にマージ（TwoWeekForecastCard用）
-	const todayDate = new Date();
-	const todayDateStr = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
-	const tomorrowDate = new Date(todayDate);
-	tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-	const tomorrowDateStr = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, "0")}-${String(tomorrowDate.getDate()).padStart(2, "0")}`;
+	const now = new Date();
+	const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+	const todayDateStr = jstNow.toISOString().split("T")[0];
+	const jstTom = new Date(jstNow.getTime() + 24 * 60 * 60 * 1000);
+	const tomorrowDateStr = jstTom.toISOString().split("T")[0];
 
 	const mergedWeekly: DailyForecastItem[] = [];
 
@@ -435,6 +442,19 @@ export async function fetchJmaDirect(
 	const existingTomorrow = weeklyDaily.find(
 		(d) => d.date === tomorrowDateStr,
 	);
+	if (
+		tomorrowMaxTemp === undefined &&
+		existingTomorrow?.maxTemp !== undefined
+	) {
+		tomorrowMaxTemp = existingTomorrow.maxTemp;
+	}
+	if (
+		tomorrowMinTemp === undefined &&
+		existingTomorrow?.minTemp !== undefined
+	) {
+		tomorrowMinTemp = existingTomorrow.minTemp;
+	}
+
 	mergedWeekly.push({
 		date: tomorrowDateStr,
 		weatherText: tomorrowWeather || existingTomorrow?.weatherText || "",

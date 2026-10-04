@@ -29,7 +29,7 @@ export const Section: React.FC<SectionProps> = ({
 };
 
 interface SectionHeaderProps {
-	title: string;
+	title?: string;
 	subtitle?: string;
 	rightElement?: React.ReactNode;
 	style?: StyleProp<ViewStyle>;
@@ -44,7 +44,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 	return (
 		<View style={[styles.header, style]}>
 			<View style={styles.titleGroup}>
-				<Text style={styles.title}>{title}</Text>
+				{title && <Text style={styles.title}>{title}</Text>}
 				{subtitle ? (
 					<Text style={styles.subtitle}>{subtitle}</Text>
 				) : null}

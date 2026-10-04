@@ -122,7 +122,7 @@ export const TwoWeekForecastCard: React.FC<Props> = React.memo(
 												<Text style={styles.maxTemp}>
 													{jmaItem.maxTemp !==
 													undefined
-														? `${Math.round(jmaItem.maxTemp)}°`
+														? `${Math.round(jmaItem.maxTemp)}℃`
 														: "-"}
 												</Text>
 												<Text style={styles.tempSlash}>
@@ -131,7 +131,7 @@ export const TwoWeekForecastCard: React.FC<Props> = React.memo(
 												<Text style={styles.minTemp}>
 													{jmaItem.minTemp !==
 													undefined
-														? `${Math.round(jmaItem.minTemp)}°`
+														? `${Math.round(jmaItem.minTemp)}℃`
 														: "-"}
 												</Text>
 											</View>
@@ -162,7 +162,7 @@ export const TwoWeekForecastCard: React.FC<Props> = React.memo(
 													{Math.round(
 														jmaModelItem.maxTemp,
 													)}
-													°
+													℃
 												</Text>
 												<Text style={styles.tempSlash}>
 													/
@@ -172,7 +172,7 @@ export const TwoWeekForecastCard: React.FC<Props> = React.memo(
 														jmaModelItem.minTemp ??
 															0,
 													)}
-													°
+													℃
 												</Text>
 											</View>
 											{jmaModelItem.pop !== undefined && (
@@ -218,7 +218,7 @@ export const TwoWeekForecastCard: React.FC<Props> = React.memo(
 													{Math.round(
 														ecmwfItem.maxTemp,
 													)}
-													°
+													℃
 												</Text>
 												<Text style={styles.tempSlash}>
 													/
@@ -227,7 +227,7 @@ export const TwoWeekForecastCard: React.FC<Props> = React.memo(
 													{Math.round(
 														ecmwfItem.minTemp ?? 0,
 													)}
-													°
+													℃
 												</Text>
 											</View>
 											{ecmwfItem.pop !== undefined && (

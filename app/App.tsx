@@ -11,6 +11,7 @@ import {
 	ActivityIndicator,
 	Platform,
 	StatusBar as NativeStatusBar,
+	useWindowDimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { CITIES } from "./src/constants/cities";
@@ -36,8 +37,11 @@ import {
 	getLastSelectedCity,
 	saveLastSelectedCity,
 } from "./src/services/cityStorage";
+import { UiScaleProvider, useUiScale } from "./src/context/UiScaleContext";
 
-export default function App() {
+function MainApp() {
+	const { uiScale } = useUiScale();
+	const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 	const [currentCity, setCurrentCity] = useState<CityConfig>(CITIES[0]);
 	const [isCityInitialized, setIsCityInitialized] = useState<boolean>(false);
 	const activeCityIdRef = useRef<string>(CITIES[0].id);
@@ -152,125 +156,141 @@ export default function App() {
 	return (
 		<SafeAreaView style={styles.safeArea}>
 			<StatusBar style="dark" />
-			<View style={styles.header}>
-				<TouchableOpacity
-					style={styles.headerLeftGroup}
-					onPress={() => setIsLocationModalVisible(true)}
-					activeOpacity={0.7}
-				>
-					<Image
-						source={require("./assets/logo.png")}
-						style={styles.headerLogo}
-						resizeMode="contain"
-					/>
-					<View style={styles.headerTextGroup}>
-						<View style={styles.cityNameRow}>
-							<Text style={styles.cityNameText}>
-								{currentCity.name}
-							</Text>
-							<Text style={styles.cityDropdownIcon}>▾</Text>
-						</View>
-						<Text style={styles.headerMetaText}>
-							{currentCity.latitude.toFixed(2)}°N,{" "}
-							{currentCity.longitude.toFixed(2)}
-							°E • 気象庁 / ECMWF 統合
-						</Text>
-					</View>
-				</TouchableOpacity>
-
-				{/* 設定ボタン */}
-				<TouchableOpacity
-					style={styles.settingsHeaderBtn}
-					onPress={() => setIsSettingsModalVisible(true)}
-					hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-					activeOpacity={0.7}
-					accessibilityLabel="設定"
-				>
-					<Image
-						source={require("./assets/gear.png")}
-						style={styles.gearIcon}
-						resizeMode="contain"
-					/>
-				</TouchableOpacity>
-			</View>
-
-			{/* メインコンテンツ */}
-			{isLoading && !isRefreshing ? (
-				<View style={styles.centerContainer}>
-					<ActivityIndicator size="small" color="#0F172A" />
-					<Text style={styles.loadingText}>
-						気象データを取得中...
-					</Text>
-				</View>
-			) : errorMessage ? (
-				<View style={styles.centerContainer}>
-					<Text style={styles.errorText}>{errorMessage}</Text>
+			<View
+				style={[
+					styles.rootScalingWrapper,
+					uiScale !== 1.0 && {
+						width: windowWidth / uiScale,
+						height: windowHeight / uiScale,
+						transform: [{ scale: uiScale }],
+						transformOrigin: "top left",
+					},
+				]}
+			>
+				<View style={styles.header}>
 					<TouchableOpacity
-						style={styles.retryButton}
-						onPress={() => {
-							setIsLoading(true);
-							loadWeather(currentCity);
-						}}
+						style={styles.headerLeftGroup}
+						onPress={() => setIsLocationModalVisible(true)}
+						activeOpacity={0.7}
 					>
-						<Text style={styles.retryButtonText}>再試行する</Text>
+						<Image
+							source={require("./assets/logo.png")}
+							style={styles.headerLogo}
+							resizeMode="contain"
+						/>
+						<View style={styles.headerTextGroup}>
+							<View style={styles.cityNameRow}>
+								<Text style={styles.cityNameText}>
+									{currentCity.name}
+								</Text>
+								<Text style={styles.cityDropdownIcon}>▾</Text>
+								{/* <Text style={styles.headerMetaText}>
+									{currentCity.latitude.toFixed(2)}°N,{" "}
+									{currentCity.longitude.toFixed(2)}
+									°E • 気象庁 / ECMWF 統合 
+								</Text> */}
+							</View>
+						</View>
+					</TouchableOpacity>
+
+					{/* 設定ボタン */}
+					<TouchableOpacity
+						style={styles.settingsHeaderBtn}
+						onPress={() => setIsSettingsModalVisible(true)}
+						hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+						activeOpacity={0.7}
+						accessibilityLabel="設定"
+					>
+						<Image
+							source={require("./assets/gear.png")}
+							style={styles.gearIcon}
+							resizeMode="contain"
+						/>
 					</TouchableOpacity>
 				</View>
-			) : weatherData ? (
-				<ScrollView
-					style={styles.contentScroll}
-					contentContainerStyle={styles.scrollContent}
-					keyboardShouldPersistTaps="handled"
-					refreshControl={
-						<RefreshControl
-							refreshing={isRefreshing}
-							onRefresh={onRefresh}
-							colors={["#2563EB"]}
-						/>
-					}
-				>
-					<View style={styles.mainContainer}>
-						{/* メイン予報（今日／明日、モデル切り替え式）＋ 服装目安 */}
-						<TodayComparisonCard
-							jma={weatherData.jma}
-							openMeteoJma={weatherData.openMeteoJma}
-							openMeteoEcmwf={weatherData.openMeteoEcmwf}
-							clothingAdvice={weatherData.clothingAdvice}
-							selectedDay={selectedDay}
-							onSelectDay={setSelectedDay}
-							selectedModel={selectedModel}
-							onSelectModel={setSelectedModel}
-						/>
 
-						{/* 特記事項・気象概況 (気象庁公式) */}
-						<AlertNoticeCard jma={weatherData.jma} />
-
-						{/* 時間別推移 (今日〜明日 48時間) */}
-						<HourlyTimeline
-							items={
-								selectedModel === "openMeteoEcmwf"
-									? weatherData.openMeteoEcmwf.hourly
-									: weatherData.openMeteoJma.hourly
-							}
-							selectedDay={selectedDay}
-							onDayChange={setSelectedDay}
-							modelLabel={
-								selectedModel === "openMeteoEcmwf"
-									? "ECMWF欧州"
-									: "JMA数値"
-							}
-						/>
-
-						{/* 2週間先までの週間予報【完全併記】 */}
-						<TwoWeekForecastCard
-							jmaWeekly={weatherData.jma.weeklyDaily}
-							openMeteoJmaDaily={weatherData.openMeteoJma.daily}
-							openMeteoEcmwfDaily={
-								weatherData.openMeteoEcmwf.daily
-							}
-						/>
+				{/* メインコンテンツ */}
+				{isLoading && !isRefreshing ? (
+					<View style={styles.centerContainer}>
+						<ActivityIndicator size="small" color="#0F172A" />
+						<Text style={styles.loadingText}>
+							気象データを取得中...
+						</Text>
 					</View>
-				</ScrollView>
-			) : null}
+				) : errorMessage ? (
+					<View style={styles.centerContainer}>
+						<Text style={styles.errorText}>{errorMessage}</Text>
+						<TouchableOpacity
+							style={styles.retryButton}
+							onPress={() => {
+								setIsLoading(true);
+								loadWeather(currentCity);
+							}}
+						>
+							<Text style={styles.retryButtonText}>
+								再試行する
+							</Text>
+						</TouchableOpacity>
+					</View>
+				) : weatherData ? (
+					<ScrollView
+						style={styles.contentScroll}
+						contentContainerStyle={styles.scrollContent}
+						keyboardShouldPersistTaps="handled"
+						refreshControl={
+							<RefreshControl
+								refreshing={isRefreshing}
+								onRefresh={onRefresh}
+								colors={["#2563EB"]}
+							/>
+						}
+					>
+						<View style={styles.mainContainer}>
+							{/* メイン予報（今日／明日、モデル切り替え式）＋ 服装目安 */}
+							<TodayComparisonCard
+								jma={weatherData.jma}
+								openMeteoJma={weatherData.openMeteoJma}
+								openMeteoEcmwf={weatherData.openMeteoEcmwf}
+								clothingAdvice={weatherData.clothingAdvice}
+								selectedDay={selectedDay}
+								onSelectDay={setSelectedDay}
+								selectedModel={selectedModel}
+								onSelectModel={setSelectedModel}
+							/>
+
+							{/* 特記事項・気象概況 (気象庁公式) */}
+							<AlertNoticeCard jma={weatherData.jma} />
+
+							{/* 時間別推移 (今日〜明日 48時間) */}
+							<HourlyTimeline
+								items={
+									selectedModel === "openMeteoEcmwf"
+										? weatherData.openMeteoEcmwf.hourly
+										: weatherData.openMeteoJma.hourly
+								}
+								selectedDay={selectedDay}
+								onDayChange={setSelectedDay}
+								modelLabel={
+									selectedModel === "openMeteoEcmwf"
+										? "ECMWF欧州"
+										: "JMA数値"
+								}
+							/>
+
+							{/* 2週間先までの週間予報【完全併記】 */}
+							<TwoWeekForecastCard
+								jmaWeekly={weatherData.jma.weeklyDaily}
+								openMeteoJmaDaily={
+									weatherData.openMeteoJma.daily
+								}
+								openMeteoEcmwfDaily={
+									weatherData.openMeteoEcmwf.daily
+								}
+							/>
+						</View>
+					</ScrollView>
+				) : null}
+			</View>
 
 			{/* 任意地域設定モーダル */}
 			<LocationSettingsModal
@@ -306,6 +326,14 @@ export default function App() {
 	);
 }
 
+export default function App() {
+	return (
+		<UiScaleProvider>
+			<MainApp />
+		</UiScaleProvider>
+	);
+}
+
 const styles = StyleSheet.create({
 	safeArea: {
 		flex: 1,
@@ -314,6 +342,10 @@ const styles = StyleSheet.create({
 			Platform.OS === "android"
 				? (NativeStatusBar.currentHeight || 28) + 4
 				: 0,
+	},
+	rootScalingWrapper: {
+		flex: 1,
+		width: "100%",
 	},
 	header: {
 		flexDirection: "row",
@@ -351,12 +383,12 @@ const styles = StyleSheet.create({
 		letterSpacing: -0.5,
 	},
 	cityDropdownIcon: {
-		fontSize: 14,
+		fontSize: 16,
 		color: "#64748B",
 		marginTop: 2,
 	},
 	headerMetaText: {
-		fontSize: 11,
+		fontSize: 8,
 		color: "#64748B",
 		fontWeight: "500",
 		marginTop: 2,

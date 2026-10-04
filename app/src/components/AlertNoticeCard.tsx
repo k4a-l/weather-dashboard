@@ -24,9 +24,7 @@ export const AlertNoticeCard: React.FC<Props> = React.memo(({ jma }) => {
 		<Section>
 			<SectionHeader
 				title="気象概況"
-				rightElement={
-					<Text style={styles.sourceLabel}>気象庁発表</Text>
-				}
+				rightElement={<Text style={styles.sourceLabel}>気象庁</Text>}
 			/>
 
 			{jma.alertNotices.length > 0 && (
