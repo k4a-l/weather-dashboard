@@ -1,0 +1,20 @@
+{
+  "name": "weather-dashboard-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "app",
+    "worker"
+  ],
+  "scripts": {
+    "lint": "oxlint -c oxlint.json app/src app/App.tsx worker/src",
+    "lint:fix": "oxlint -c oxlint.json --fix app/src app/App.tsx worker/src",
+    "test:worker": "npm test --workspace=worker",
+    "build:worker": "npm run build --workspace=worker",
+    "typecheck:app": "npx tsc --noEmit -p app",
+    "start:app": "npm start --workspace=app"
+  },
+  "devDependencies": {
+    "oxlint": "^1.42.0"
+  }
+}

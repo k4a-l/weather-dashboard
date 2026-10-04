@@ -4,14 +4,27 @@ import {
 	ModelForecast,
 	JmaForecastData,
 	HourlyForecastItem,
+	DailyForecastItem,
 } from "../types";
 
 export function getWeatherIcon(textOrCode: string | number): string {
 	const text = String(textOrCode);
-	if (text.includes("晴") || text === "0" || text === "1") return "☀️";
+	if (
+		text.includes("晴") ||
+		text === "0" ||
+		text === "1" ||
+		text.startsWith("1")
+	)
+		return "☀️";
 	if (text.includes("雷") || text === "95" || text === "96" || text === "99")
 		return "⚡";
-	if (text.includes("雪") || text === "71" || text === "73" || text === "75")
+	if (
+		text.includes("雪") ||
+		text === "71" ||
+		text === "73" ||
+		text === "75" ||
+		text.startsWith("4")
+	)
 		return "❄️";
 	if (
 		text.includes("雨") ||
@@ -19,14 +32,16 @@ export function getWeatherIcon(textOrCode: string | number): string {
 		text === "61" ||
 		text === "63" ||
 		text === "65" ||
-		text === "80"
+		text === "80" ||
+		text.startsWith("3")
 	)
 		return "🌧️";
 	if (
 		text.includes("曇") ||
 		text.includes("くもり") ||
 		text === "2" ||
-		text === "3"
+		text === "3" ||
+		text.startsWith("2")
 	)
 		return "☁️";
 	if (text.includes("霧") || text === "45" || text === "48") return "🌫️";
@@ -73,6 +88,26 @@ export function getWeatherTextFromCode(code: number): string {
 	}
 }
 
+export function getJmaWeatherTextFromCode(code: string): string {
+	if (code.startsWith("100")) return "晴れ";
+	if (code.startsWith("101")) return "晴れ時々曇り";
+	if (code.startsWith("110")) return "晴れのち曇り";
+	if (code.startsWith("200")) return "くもり";
+	if (code.startsWith("201")) return "曇り時々晴れ";
+	if (code.startsWith("202")) return "曇り一時雨";
+	if (code.startsWith("210")) return "曇りのち晴れ";
+	if (code.startsWith("211")) return "曇りのち雨";
+	if (code.startsWith("300")) return "雨";
+	if (code.startsWith("301")) return "雨時々晴れ";
+	if (code.startsWith("311")) return "雨のち曇り";
+	if (code.startsWith("400")) return "雪";
+	if (code.startsWith("1")) return "晴れ";
+	if (code.startsWith("2")) return "くもり";
+	if (code.startsWith("3")) return "雨";
+	if (code.startsWith("4")) return "雪";
+	return "くもり";
+}
+
 export function getClothingAdvice(
 	maxTemp: number,
 	minTemp: number,
@@ -108,6 +143,56 @@ export function getClothingAdvice(
 	return `${baseAdvice} ${extraAdvice}`.trim();
 }
 
+interface JmaArea {
+	area: { name: string; code: string };
+	weatherCodes?: string[];
+	weathers?: string[];
+	winds?: string[];
+	waves?: string[];
+	pops?: string[];
+	temps?: string[];
+	tempsMin?: string[];
+	tempsMax?: string[];
+}
+
+interface JmaTimeSeriesItem {
+	timeDefines?: string[];
+	areas?: JmaArea[];
+}
+
+interface JmaForecastResponseItem {
+	reportDatetime?: string;
+	timeSeries?: JmaTimeSeriesItem[];
+}
+
+interface JmaOverviewResponse {
+	text?: string;
+	headlineText?: string;
+}
+
+interface OpenMeteoDailyData {
+	time?: string[];
+	weather_code?: (number | null)[];
+	temperature_2m_max?: (number | null)[];
+	temperature_2m_min?: (number | null)[];
+	precipitation_probability_max?: (number | null)[];
+	precipitation_sum?: (number | null)[];
+}
+
+interface OpenMeteoHourlyData {
+	time?: string[];
+	temperature_2m?: number[];
+	apparent_temperature?: number[];
+	precipitation_probability?: number[];
+	precipitation?: number[];
+	weather_code?: number[];
+}
+
+interface OpenMeteoApiResponse {
+	daily?: OpenMeteoDailyData;
+	hourly?: OpenMeteoHourlyData;
+}
+
 export async function fetchJmaDirect(
 	city: CityConfig,
 ): Promise<JmaForecastData> {
@@ -123,19 +208,26 @@ export async function fetchJmaDirect(
 	let todayPops: string[] = [];
 	let todayMaxTemp: number | undefined;
 	let todayMinTemp: number | undefined;
+	let tomorrowWeather: string | undefined;
+	let tomorrowPops: string[] | undefined;
+	let tomorrowMaxTemp: number | undefined;
+	let tomorrowMinTemp: number | undefined;
 	let reportDatetime = new Date().toISOString();
+	const weeklyDaily: DailyForecastItem[] = [];
 
 	if (forecastRes.ok) {
-		const forecastData: any = await forecastRes.json();
+		const forecastData =
+			(await forecastRes.json()) as JmaForecastResponseItem[];
 		if (Array.isArray(forecastData) && forecastData.length > 0) {
 			reportDatetime = forecastData[0].reportDatetime || reportDatetime;
 			const timeSeries = forecastData[0].timeSeries || [];
 
+			// 今日の天気・明日の天気
 			const weatherSeries = timeSeries[0];
 			if (weatherSeries && weatherSeries.areas) {
 				const targetArea =
 					weatherSeries.areas.find(
-						(a: any) => a.area.code === city.jmaAreaCode,
+						(a) => a.area.code === city.jmaAreaCode,
 					) || weatherSeries.areas[0];
 				if (
 					targetArea &&
@@ -145,66 +237,162 @@ export async function fetchJmaDirect(
 					todayWeather = targetArea.weathers[0]
 						.replace(/\s+/g, " ")
 						.trim();
+					if (targetArea.weathers.length > 1) {
+						tomorrowWeather = targetArea.weathers[1]
+							.replace(/\s+/g, " ")
+							.trim();
+					}
 				}
 			}
 
+			// 降水確率
 			const popSeries = timeSeries[1];
 			if (popSeries && popSeries.areas) {
 				const targetArea =
 					popSeries.areas.find(
-						(a: any) => a.area.code === city.jmaAreaCode,
+						(a) => a.area.code === city.jmaAreaCode,
 					) || popSeries.areas[0];
 				if (targetArea && targetArea.pops) {
-					todayPops = targetArea.pops;
+					if (targetArea.pops.length > 4) {
+						todayPops = targetArea.pops.slice(0, 4);
+						tomorrowPops = targetArea.pops.slice(4);
+					} else {
+						todayPops = targetArea.pops;
+					}
 				}
 			}
 
+			// 今日の気温・明日の気温
 			const tempSeries = timeSeries[2];
 			if (tempSeries && tempSeries.areas) {
 				const targetArea =
 					tempSeries.areas.find(
-						(a: any) => a.area.code === city.jmaAreaCode,
+						(a) => a.area.code === city.jmaAreaCode,
 					) || tempSeries.areas[0];
 				if (targetArea && targetArea.temps) {
 					const temps = targetArea.temps
 						.map((t: string) => parseFloat(t))
 						.filter((t: number) => !isNaN(t));
-					if (temps.length >= 2) {
+					if (temps.length >= 4) {
+						todayMinTemp = temps[0];
+						todayMaxTemp = temps[1];
+						tomorrowMinTemp = temps[2];
+						tomorrowMaxTemp = temps[3];
+					} else if (temps.length >= 2) {
 						todayMinTemp = temps[0];
 						todayMaxTemp = temps[1];
 					}
 				}
 			}
+
+			// 週間天気予報 (forecastData[1])
+			if (forecastData.length > 1 && forecastData[1].timeSeries) {
+				const weeklyTimeSeries = forecastData[1].timeSeries;
+				const weeklyWeatherSeries = weeklyTimeSeries[0];
+				const weeklyTempSeries = weeklyTimeSeries[1];
+
+				const timeDefines: string[] =
+					weeklyWeatherSeries?.timeDefines || [];
+				const weeklyArea =
+					weeklyWeatherSeries?.areas?.find(
+						(a) => a.area.code === city.jmaAreaCode,
+					) || weeklyWeatherSeries?.areas?.[0];
+				const weatherCodes: string[] = weeklyArea?.weatherCodes || [];
+				const pops: string[] = weeklyArea?.pops || [];
+
+				const tempArea =
+					weeklyTempSeries?.areas?.find(
+						(a) => a.area.code === city.jmaAreaCode,
+					) || weeklyTempSeries?.areas?.[0];
+				const minTemps: string[] = tempArea?.tempsMin || [];
+				const maxTemps: string[] = tempArea?.tempsMax || [];
+
+				for (let i = 0; i < timeDefines.length; i++) {
+					const dateStr = timeDefines[i].split("T")[0];
+					const wCode = weatherCodes[i] || "";
+					weeklyDaily.push({
+						date: dateStr,
+						weatherText: getJmaWeatherTextFromCode(wCode),
+						maxTemp:
+							maxTemps[i] && maxTemps[i] !== ""
+								? parseFloat(maxTemps[i])
+								: undefined,
+						minTemp:
+							minTemps[i] && minTemps[i] !== ""
+								? parseFloat(minTemps[i])
+								: undefined,
+						pop:
+							pops[i] && pops[i] !== ""
+								? parseInt(pops[i], 10)
+								: undefined,
+					});
+				}
+			}
+		}
+	}
+
+	// 明日のデータ補完（週間予報から）
+	if (weeklyDaily.length > 0) {
+		const tomorrowItem = weeklyDaily[0];
+		if (tomorrowMaxTemp === undefined && tomorrowItem?.maxTemp !== undefined) {
+			tomorrowMaxTemp = tomorrowItem.maxTemp;
+		}
+		if (tomorrowMinTemp === undefined && tomorrowItem?.minTemp !== undefined) {
+			tomorrowMinTemp = tomorrowItem.minTemp;
+		}
+		if (!tomorrowWeather && tomorrowItem?.weatherText) {
+			tomorrowWeather = tomorrowItem.weatherText;
+		}
+		if ((!tomorrowPops || tomorrowPops.length === 0) && tomorrowItem?.pop !== undefined) {
+			tomorrowPops = [`${tomorrowItem.pop}%`];
 		}
 	}
 
 	let overviewText = "";
 	let headlineText = "";
 	if (overviewRes.ok) {
-		const overviewData: any = await overviewRes.json();
-		overviewText = overviewData.text
-			? overviewData.text.replace(/\r?\n+/g, " ").trim()
-			: "";
-		headlineText = overviewData.headlineText
-			? overviewData.headlineText.trim()
-			: "";
+		const overviewData =
+			(await overviewRes.json()) as JmaOverviewResponse;
+		const rawText: string = overviewData.text || "";
+		// 各段落の全角・半角スペースを除去し、空行を除いて適切な段落改行で再結合
+		const paragraphs = rawText
+			.split(/\r?\n+/)
+			.map((line: string) =>
+				line.replace(/^[\s\u3000]+|[\s\u3000]+$/g, "").trim(),
+			)
+			.filter((line: string) => line.length > 0);
+		overviewText = paragraphs.join("\n\n");
+		headlineText = (overviewData.headlineText || "")
+			.replace(/^[\s\u3000]+|[\s\u3000]+$/g, "")
+			.trim();
 	}
 
 	const typhoonMentioned =
 		/台風/i.test(overviewText) || /台風/i.test(headlineText);
 	const alertNotices: string[] = [];
 	if (typhoonMentioned) {
-		const match = overviewText.match(/台風第?[０-９0-9]+号[^\s。、]*/);
-		alertNotices.push(match ? `🌀 ${match[0]}` : "🌀 台風の動向に注意");
+		const match = overviewText.match(/台風第?([０-９0-9]+)号/);
+		if (match) {
+			const normalizedNum = match[1].replace(/[０-９]/g, (s) =>
+				String.fromCharCode(s.charCodeAt(0) - 0xfee0),
+			);
+			alertNotices.push(`台風第${normalizedNum}号`);
+		} else {
+			alertNotices.push("台風情報");
+		}
 	}
-	if (/警報|警戒/i.test(overviewText) || /警報/i.test(headlineText)) {
-		alertNotices.push("⚠️ 大雨や暴風などの警報に警戒");
+	if (/特別警報/i.test(overviewText) || /特別警報/i.test(headlineText)) {
+		alertNotices.push("特別警報発令中");
+	} else if (/警報/i.test(overviewText) || /警報/i.test(headlineText)) {
+		alertNotices.push("警報発令中");
+	} else if (/警戒/i.test(overviewText)) {
+		alertNotices.push("警戒事項あり");
 	}
 	if (/雷/i.test(overviewText) || /突風/i.test(overviewText)) {
-		alertNotices.push("⚡ 急な雷雨や突風に注意");
+		alertNotices.push("落雷・突風注意");
 	}
 	if (/熱中症/i.test(overviewText)) {
-		alertNotices.push("🌡️ 熱中症対策を徹底");
+		alertNotices.push("熱中症注意");
 	}
 
 	return {
@@ -214,10 +402,15 @@ export async function fetchJmaDirect(
 		todayPops,
 		todayMaxTemp,
 		todayMinTemp,
+		tomorrowWeather,
+		tomorrowPops,
+		tomorrowMaxTemp,
+		tomorrowMinTemp,
 		overviewText,
 		headlineText,
 		typhoonMentioned,
 		alertNotices,
+		weeklyDaily,
 	};
 }
 
@@ -231,15 +424,15 @@ export async function fetchOpenMeteoDirect(
 	url.searchParams.set("longitude", city.longitude.toString());
 	url.searchParams.set(
 		"daily",
-		"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+		"weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum",
 	);
 	url.searchParams.set(
 		"hourly",
-		"temperature_2m,apparent_temperature,precipitation_probability,weather_code",
+		"temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code",
 	);
 	url.searchParams.set("timezone", "Asia/Tokyo");
 	url.searchParams.set("past_days", "1");
-	url.searchParams.set("forecast_days", "3");
+	url.searchParams.set("forecast_days", "14"); // 2週間先まで取得
 	url.searchParams.set("models", modelName);
 
 	const res = await fetch(url.toString());
@@ -247,29 +440,48 @@ export async function fetchOpenMeteoDirect(
 		throw new Error(`Open-Meteo API failed with ${res.status}`);
 	}
 
-	const data: any = await res.json();
-	const daily = data.daily || {};
+	const data = (await res.json()) as OpenMeteoApiResponse;
+	const dailyData = data.daily || {};
 	const hourlyData = data.hourly || {};
 
-	const prevMax = daily.temperature_2m_max?.[0] ?? 20;
-	const prevMin = daily.temperature_2m_min?.[0] ?? 15;
-	const todayMax = daily.temperature_2m_max?.[1] ?? 20;
-	const todayMin = daily.temperature_2m_min?.[1] ?? 15;
-	const todayCode = daily.weather_code?.[1] ?? 0;
-	const popMax = daily.precipitation_probability_max?.[1] ?? 0;
+	const prevMax = dailyData.temperature_2m_max?.[0] ?? 20;
+	const prevMin = dailyData.temperature_2m_min?.[0] ?? 15;
+	const todayMax = dailyData.temperature_2m_max?.[1] ?? 20;
+	const todayMin = dailyData.temperature_2m_min?.[1] ?? 15;
+	const todayCode = dailyData.weather_code?.[1] ?? 0;
+	const popMax = dailyData.precipitation_probability_max?.[1] ?? 0;
+	const precipitationSum =
+		dailyData.precipitation_sum?.[1] !== undefined && dailyData.precipitation_sum?.[1] !== null
+			? Math.round(dailyData.precipitation_sum[1] * 10) / 10
+			: 0;
 
 	const maxTempDiff = Math.round((todayMax - prevMax) * 10) / 10;
 	const minTempDiff = Math.round((todayMin - prevMin) * 10) / 10;
 
+	// 明日の予報（index 2）
+	const tomorrowMax = dailyData.temperature_2m_max?.[2] ?? todayMax;
+	const tomorrowMin = dailyData.temperature_2m_min?.[2] ?? todayMin;
+	const tomorrowCode = dailyData.weather_code?.[2] ?? todayCode;
+	const tomorrowPopMax = dailyData.precipitation_probability_max?.[2] ?? popMax;
+	const tomorrowPrecipitationSum =
+		dailyData.precipitation_sum?.[2] !== undefined && dailyData.precipitation_sum?.[2] !== null
+			? Math.round(dailyData.precipitation_sum[2] * 10) / 10
+			: 0;
+
+	const tomorrowMaxTempDiff = Math.round((tomorrowMax - todayMax) * 10) / 10;
+	const tomorrowMinTempDiff = Math.round((tomorrowMin - todayMin) * 10) / 10;
+
+	// 本日＋明日の時間別推移（48時間分: startIndex 24から48時間）
 	const hourly: HourlyForecastItem[] = [];
 	const times: string[] = hourlyData.time || [];
 	const temps: number[] = hourlyData.temperature_2m || [];
 	const apparentTemps: number[] = hourlyData.apparent_temperature || [];
 	const pops: number[] = hourlyData.precipitation_probability || [];
+	const precipitations: number[] = hourlyData.precipitation || [];
 	const codes: number[] = hourlyData.weather_code || [];
 
 	const startIndex = 24;
-	const endIndex = Math.min(times.length, startIndex + 24);
+	const endIndex = Math.min(times.length, startIndex + 48);
 
 	for (let i = startIndex; i < endIndex; i++) {
 		hourly.push({
@@ -277,7 +489,39 @@ export async function fetchOpenMeteoDirect(
 			temp: temps[i] ?? 0,
 			apparentTemp: apparentTemps[i] ?? temps[i] ?? 0,
 			pop: pops[i] ?? 0,
+			precipitation:
+				precipitations[i] !== undefined
+					? Math.round(precipitations[i] * 10) / 10
+					: 0,
 			weatherCode: codes[i] ?? 0,
+		});
+	}
+
+	// 14日先までのデイリー予報リスト（index 1 以降）
+	const daily: DailyForecastItem[] = [];
+	const dailyDates: string[] = dailyData.time || [];
+	const dailyCodes: (number | null)[] = dailyData.weather_code || [];
+	const dailyMaxTemps: (number | null)[] = dailyData.temperature_2m_max || [];
+	const dailyMinTemps: (number | null)[] = dailyData.temperature_2m_min || [];
+	const dailyPops: (number | null)[] =
+		dailyData.precipitation_probability_max || [];
+	const dailyPrecipitations: (number | null)[] =
+		dailyData.precipitation_sum || [];
+
+	for (let i = 1; i < dailyDates.length; i++) {
+		const dCode = dailyCodes[i];
+		daily.push({
+			date: dailyDates[i],
+			weatherCode: dCode !== null ? dCode : undefined,
+			weatherText:
+				dCode !== null ? getWeatherTextFromCode(dCode) : "予測範囲外",
+			maxTemp: dailyMaxTemps[i] !== null ? dailyMaxTemps[i]! : undefined,
+			minTemp: dailyMinTemps[i] !== null ? dailyMinTemps[i]! : undefined,
+			pop: dailyPops[i] !== null ? dailyPops[i]! : undefined,
+			precipitation:
+				dailyPrecipitations[i] !== null && dailyPrecipitations[i] !== undefined
+					? Math.round(dailyPrecipitations[i]! * 10) / 10
+					: undefined,
 		});
 	}
 
@@ -289,11 +533,21 @@ export async function fetchOpenMeteoDirect(
 		maxTemp: todayMax,
 		minTemp: todayMin,
 		popMax,
+		precipitationSum,
 		prevMaxTemp: prevMax,
 		prevMinTemp: prevMin,
 		maxTempDiff,
 		minTempDiff,
+		tomorrowWeatherCode: tomorrowCode,
+		tomorrowWeatherText: getWeatherTextFromCode(tomorrowCode),
+		tomorrowMaxTemp: tomorrowMax,
+		tomorrowMinTemp: tomorrowMin,
+		tomorrowPopMax: tomorrowPopMax,
+		tomorrowPrecipitationSum: tomorrowPrecipitationSum,
+		tomorrowMaxTempDiff,
+		tomorrowMinTempDiff,
 		hourly,
+		daily,
 	};
 }
 
@@ -302,8 +556,8 @@ export async function fetchAggregatedWeatherDirect(
 ): Promise<AggregatedWeatherData> {
 	const [jma, openMeteoJma, openMeteoEcmwf] = await Promise.all([
 		fetchJmaDirect(city),
-		fetchOpenMeteoDirect(city, "jma_seamless", "気象庁モデル (JMA)"),
-		fetchOpenMeteoDirect(city, "ecmwf_ifs025", "欧州モデル (ECMWF)"),
+		fetchOpenMeteoDirect(city, "jma_seamless", "JMA (気象庁数値)"),
+		fetchOpenMeteoDirect(city, "ecmwf_ifs025", "ECMWF (欧州数値)"),
 	]);
 
 	const maxTemp = openMeteoJma.maxTemp;
@@ -319,7 +573,6 @@ export async function fetchAggregatedWeatherDirect(
 	const bodyLines: string[] = [
 		`最高 ${maxTemp}℃ / 最低 ${minTemp}℃ (${diffSign(minDiff)}℃)`,
 		clothingAdvice,
-		`[比較] JMA: ${openMeteoJma.todayWeatherText} | ECMWF: ${openMeteoEcmwf.todayWeatherText}`,
 	];
 	if (jma.alertNotices.length > 0) {
 		bodyLines.push(jma.alertNotices.join(" / "));

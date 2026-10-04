@@ -1,100 +1,127 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { JmaForecastData } from "../types";
+import { Section, SectionHeader } from "./Section";
 
 interface Props {
 	jma: JmaForecastData;
 }
 
-export const AlertNoticeCard: React.FC<Props> = ({ jma }) => {
+export const AlertNoticeCard: React.FC<Props> = React.memo(({ jma }) => {
 	const [expanded, setExpanded] = useState(false);
 
 	if (jma.alertNotices.length === 0 && !jma.overviewText) {
 		return null;
 	}
 
+	const paragraphs = jma.overviewText ? jma.overviewText.split("\n\n") : [];
+	const hasMore = paragraphs.length > 1;
+	const displayText = expanded
+		? jma.overviewText
+		: (paragraphs[0] || jma.overviewText);
+
 	return (
-		<View style={styles.card}>
-			<Text style={styles.title}>⚠️ 特記事項・気象概況 (気象庁)</Text>
+		<Section>
+			<SectionHeader
+				title="気象概況"
+				rightElement={
+					<Text style={styles.sourceLabel}>気象庁発表</Text>
+				}
+			/>
 
 			{jma.alertNotices.length > 0 && (
 				<View style={styles.alertList}>
-					{jma.alertNotices.map((alert, index) => (
-						<View key={index} style={styles.alertItem}>
-							<Text style={styles.alertItemText}>{alert}</Text>
-						</View>
-					))}
+					{jma.alertNotices.map((alert, index) => {
+						const cleanAlert = alert.replace(
+							/^[\p{Emoji}\s]+/u,
+							"",
+						);
+						return (
+							<View key={index} style={styles.alertBadge}>
+								<Text style={styles.alertBadgeText}>
+									{cleanAlert}
+								</Text>
+							</View>
+						);
+					})}
 				</View>
 			)}
 
 			{jma.overviewText.length > 0 && (
-				<View style={styles.overviewContainer}>
-					<Text
-						style={styles.overviewText}
-						numberOfLines={expanded ? undefined : 3}
-					>
-						{jma.overviewText}
-					</Text>
-					<TouchableOpacity
-						onPress={() => setExpanded(!expanded)}
-						style={styles.expandButton}
-					>
-						<Text style={styles.expandButtonText}>
-							{expanded ? "閉じる ▲" : "概況の全文を読む ▼"}
-						</Text>
-					</TouchableOpacity>
-				</View>
+				<TouchableOpacity
+					activeOpacity={hasMore ? 0.7 : 1}
+					onPress={() => hasMore && setExpanded(!expanded)}
+					style={styles.overviewContainer}
+				>
+					<Text style={styles.overviewText}>{displayText}</Text>
+					{hasMore && (
+						<View style={styles.expandIconBtn}>
+							<View
+								style={[
+									styles.chevron,
+									expanded ? styles.chevronUp : styles.chevronDown,
+								]}
+							/>
+						</View>
+					)}
+				</TouchableOpacity>
 			)}
-		</View>
+		</Section>
 	);
-};
+});
 
 const styles = StyleSheet.create({
-	card: {
-		backgroundColor: "#FFFBEB",
-		borderRadius: 16,
-		padding: 16,
-		marginHorizontal: 16,
-		marginVertical: 6,
-		borderWidth: 1,
-		borderColor: "#FDE68A",
-	},
-	title: {
-		fontSize: 14,
-		fontWeight: "bold",
-		color: "#92400E",
-		marginBottom: 8,
+	sourceLabel: {
+		fontSize: 11,
+		fontWeight: "500",
+		color: "#94A3B8",
 	},
 	alertList: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: 6,
 		marginBottom: 8,
 	},
-	alertItem: {
-		backgroundColor: "#FEF3C7",
-		borderRadius: 8,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
-		marginBottom: 4,
+	alertBadge: {
+		backgroundColor: "#F1F5F9",
+		borderRadius: 6,
+		paddingHorizontal: 8,
+		paddingVertical: 3,
+		borderWidth: 1,
+		borderColor: "#E2E8F0",
 	},
-	alertItemText: {
-		fontSize: 13,
-		color: "#78350F",
+	alertBadgeText: {
+		fontSize: 11,
+		color: "#334155",
 		fontWeight: "600",
 	},
 	overviewContainer: {
-		marginTop: 4,
+		marginTop: 2,
 	},
 	overviewText: {
-		fontSize: 13,
-		color: "#4B5563",
-		lineHeight: 18,
-	},
-	expandButton: {
-		marginTop: 6,
-		alignSelf: "flex-end",
-	},
-	expandButtonText: {
 		fontSize: 12,
-		color: "#D97706",
-		fontWeight: "bold",
+		color: "#475569",
+		lineHeight: 20,
+	},
+	expandIconBtn: {
+		alignSelf: "flex-end",
+		paddingTop: 4,
+		paddingBottom: 2,
+		paddingHorizontal: 4,
+	},
+	chevron: {
+		width: 7,
+		height: 7,
+		borderRightWidth: 1.5,
+		borderBottomWidth: 1.5,
+		borderColor: "#94A3B8",
+	},
+	chevronDown: {
+		transform: [{ rotate: "45deg" }],
+		marginBottom: 2,
+	},
+	chevronUp: {
+		transform: [{ rotate: "-135deg" }],
+		marginTop: 2,
 	},
 });

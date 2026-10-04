@@ -8,7 +8,12 @@ import {
 	TextInput,
 } from "react-native";
 import { NotificationPayload } from "../types";
-import { sendLocalNotificationAsync } from "../services/notification";
+import {
+	sendLocalNotificationAsync,
+	triggerTestWakeupNotificationAsync,
+	resetWakeupLastNotifiedDateAsync,
+} from "../services/notification";
+import { Section, SectionHeader } from "./Section";
 
 interface Props {
 	notificationPayload: NotificationPayload;
@@ -16,27 +21,45 @@ interface Props {
 	currentCityId: string;
 }
 
-export const NotificationControlCard: React.FC<Props> = ({
+export const NotificationControlCard: React.FC<Props> = React.memo(({
 	notificationPayload,
 	pushToken,
 	currentCityId,
 }) => {
-	// AndroidエミュレータからホストPCを見るIPは 10.0.2.2
 	const [workerUrl, setWorkerUrl] = useState("http://10.0.2.2:8787");
 	const [isSending, setIsSending] = useState(false);
+	const [showServerSection, setShowServerSection] = useState(false);
 
 	const handleLocalTestNotification = async () => {
 		try {
 			await sendLocalNotificationAsync(notificationPayload);
-			Alert.alert(
-				"通知送信完了",
-				"端末の通知エリアに天気通知が届いたか確認してください。",
-			);
-		} catch (error: any) {
-			Alert.alert(
-				"エラー",
-				`ローカル通知の送信に失敗しました: ${error.message}`,
-			);
+		} catch (error: unknown) {
+			const msg = error instanceof Error ? error.message : String(error);
+			Alert.alert("エラー", `通知の送信に失敗しました: ${msg}`);
+		}
+	};
+
+	const handleWakeupTestNotification = async () => {
+		try {
+			const success = await triggerTestWakeupNotificationAsync();
+			if (!success) {
+				Alert.alert("通知", "開発ビルドまたは実機APK環境で利用可能です。");
+			}
+		} catch (error: unknown) {
+			const msg = error instanceof Error ? error.message : String(error);
+			Alert.alert("エラー", `テスト発火に失敗しました: ${msg}`);
+		}
+	};
+
+	const handleResetWakeupDate = async () => {
+		try {
+			const success = await resetWakeupLastNotifiedDateAsync();
+			if (success) {
+				Alert.alert("リセット完了", "本日の配信記録をリセットしました。画面ロック解除時に再配信されます。");
+			}
+		} catch (error: unknown) {
+			const msg = error instanceof Error ? error.message : String(error);
+			Alert.alert("エラー", `リセットに失敗しました: ${msg}`);
 		}
 	};
 
@@ -48,184 +71,179 @@ export const NotificationControlCard: React.FC<Props> = ({
 
 		setIsSending(true);
 		try {
-			const res = await fetch(
-				`${workerUrl.replace(/\/$/, "")}/send-test`,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						token: pushToken || undefined,
-						cityId: currentCityId,
-					}),
-				},
-			);
+			const res = await fetch(`${workerUrl.replace(/\/$/, "")}/send-test`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					token: pushToken ?? undefined,
+					cityId: currentCityId,
+				}),
+			});
 
 			const data = await res.json();
 			if (res.ok) {
-				Alert.alert(
-					"Cloudflare Workers 連携成功",
-					`サーバーから通知リクエストが処理されました。\n送信先数: ${data.sentCount || 0}`,
-				);
+				Alert.alert("送信完了", `サーバーからプッシュ送信を処理しました (件数: ${data.sentCount ?? 0})`);
 			} else {
-				Alert.alert("Workerエラー", data.error || JSON.stringify(data));
+				Alert.alert("エラー", data.error || JSON.stringify(data));
 			}
-		} catch (error: any) {
-			Alert.alert(
-				"通信エラー",
-				`Workerとの接続に失敗しました: ${error.message}\nローカル通知テストは上のボタンから実行できます。`,
-			);
+		} catch (error: unknown) {
+			const msg = error instanceof Error ? error.message : String(error);
+			Alert.alert("通信エラー", `サーバーとの通信に失敗しました: ${msg}`);
 		} finally {
 			setIsSending(false);
 		}
 	};
 
 	return (
-		<View style={styles.card}>
-			<Text style={styles.title}>🔔 通知テスト・配信設定</Text>
-			<Text style={styles.subtitle}>
-				通知トレイでの表示状態（前日比・服装・特記事項）を今すぐテストできます
-			</Text>
+		<Section hasDivider={false}>
+			<SectionHeader
+				title="通知・起床連動設定"
+				subtitle="朝6:00以降の初回ロック解除時に最新予報を通知トレイへ届けます"
+			/>
 
-			{/* 即時ローカル通知ボタン */}
-			<TouchableOpacity
-				style={styles.localButton}
-				onPress={handleLocalTestNotification}
-			>
-				<Text style={styles.localButtonText}>
-					📲 端末にテスト通知を即座に表示
-				</Text>
-			</TouchableOpacity>
-
-			{/* Cloudflare Workers 連携セクション */}
-			<View style={styles.workerSection}>
-				<Text style={styles.sectionLabel}>
-					☁️ Cloudflare Workers 連携テスト
-				</Text>
-				<TextInput
-					style={styles.input}
-					value={workerUrl}
-					onChangeText={setWorkerUrl}
-					placeholder="Worker URL (例: https://weather-worker.xxx.workers.dev)"
-					autoCapitalize="none"
-				/>
+			{/* アクションボタングループ */}
+			<View style={styles.buttonRow}>
 				<TouchableOpacity
-					style={[
-						styles.workerButton,
-						isSending && styles.buttonDisabled,
-					]}
-					onPress={handleWorkerPushTest}
-					disabled={isSending}
+					style={[styles.actionButton, styles.primaryButton]}
+					onPress={handleWakeupTestNotification}
 				>
-					<Text style={styles.workerButtonText}>
-						{isSending
-							? "送信中..."
-							: "サーバー経由プッシュ通知テスト"}
-					</Text>
+					<Text style={styles.primaryButtonText}>起床通知をテスト</Text>
+				</TouchableOpacity>
+
+				<TouchableOpacity
+					style={[styles.actionButton, styles.secondaryButton]}
+					onPress={handleResetWakeupDate}
+				>
+					<Text style={styles.secondaryButtonText}>配信記録リセット</Text>
 				</TouchableOpacity>
 			</View>
 
-			{/* トークン情報 */}
-			<View style={styles.tokenBox}>
-				<Text style={styles.tokenLabel}>Expo Push Token:</Text>
-				<Text
-					style={styles.tokenValue}
-					numberOfLines={1}
-					ellipsizeMode="middle"
+			<TouchableOpacity
+				style={styles.textButton}
+				onPress={handleLocalTestNotification}
+			>
+				<Text style={styles.textButtonLabel}>ローカル通知トレイ表示テスト</Text>
+			</TouchableOpacity>
+
+			{/* サーバー連携トグル */}
+			<View style={styles.serverDivider}>
+				<TouchableOpacity
+					style={styles.serverToggle}
+					onPress={() => setShowServerSection(!showServerSection)}
 				>
-					{pushToken ? pushToken : "実機での起動時に自動発行されます"}
-				</Text>
+					<Text style={styles.serverToggleText}>
+						{showServerSection ? "サーバー連携設定を閉じる" : "Cloudflare Workers 連携設定"}
+					</Text>
+				</TouchableOpacity>
+
+				{showServerSection && (
+					<View style={styles.serverBody}>
+						<TextInput
+							style={styles.input}
+							value={workerUrl}
+							onChangeText={setWorkerUrl}
+							placeholder="https://..."
+							placeholderTextColor="#94A3B8"
+							autoCapitalize="none"
+						/>
+						<TouchableOpacity
+							style={[styles.workerButton, isSending && styles.buttonDisabled]}
+							onPress={handleWorkerPushTest}
+							disabled={isSending}
+						>
+							<Text style={styles.workerButtonText}>
+								{isSending ? "送信中..." : "サーバーからプッシュテスト"}
+							</Text>
+						</TouchableOpacity>
+					</View>
+				)}
 			</View>
-		</View>
+		</Section>
 	);
-};
+});
 
 const styles = StyleSheet.create({
-	card: {
-		backgroundColor: "#FFFFFF",
-		borderRadius: 20,
-		padding: 18,
-		marginHorizontal: 16,
-		marginVertical: 8,
-		marginBottom: 28,
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 3 },
-		shadowOpacity: 0.06,
-		shadowRadius: 10,
-		elevation: 2,
+	buttonRow: {
+		flexDirection: "row",
+		gap: 8,
+		marginTop: 4,
 	},
-	title: {
-		fontSize: 16,
-		fontWeight: "bold",
-		color: "#1F2937",
-	},
-	subtitle: {
-		fontSize: 12,
-		color: "#6B7280",
-		marginTop: 2,
-		marginBottom: 14,
-	},
-	localButton: {
-		backgroundColor: "#2563EB",
-		borderRadius: 12,
-		paddingVertical: 12,
+	actionButton: {
+		flex: 1,
+		paddingVertical: 10,
+		borderRadius: 10,
 		alignItems: "center",
-		marginBottom: 16,
+		justifyContent: "center",
 	},
-	localButtonText: {
+	primaryButton: {
+		backgroundColor: "#2563EB",
+	},
+	primaryButtonText: {
 		color: "#FFFFFF",
-		fontSize: 14,
-		fontWeight: "bold",
-	},
-	workerSection: {
-		borderTopWidth: 1,
-		borderTopColor: "#F3F4F6",
-		paddingTop: 12,
-	},
-	sectionLabel: {
 		fontSize: 13,
-		fontWeight: "bold",
-		color: "#374151",
-		marginBottom: 8,
+		fontWeight: "600",
+	},
+	secondaryButton: {
+		backgroundColor: "#F1F5F9",
+		borderWidth: 1,
+		borderColor: "#E2E8F0",
+	},
+	secondaryButtonText: {
+		color: "#334155",
+		fontSize: 13,
+		fontWeight: "600",
+	},
+	textButton: {
+		marginTop: 10,
+		alignItems: "center",
+		paddingVertical: 6,
+	},
+	textButtonLabel: {
+		fontSize: 12,
+		color: "#64748B",
+		fontWeight: "500",
+	},
+	serverDivider: {
+		marginTop: 10,
+		borderTopWidth: 1,
+		borderTopColor: "#F1F5F9",
+		paddingTop: 10,
+	},
+	serverToggle: {
+		alignItems: "center",
+		paddingVertical: 4,
+	},
+	serverToggleText: {
+		fontSize: 12,
+		color: "#94A3B8",
+		fontWeight: "500",
+	},
+	serverBody: {
+		marginTop: 10,
 	},
 	input: {
-		backgroundColor: "#F9FAFB",
+		backgroundColor: "#F8FAFC",
 		borderWidth: 1,
-		borderColor: "#E5E7EB",
-		borderRadius: 10,
+		borderColor: "#E2E8F0",
+		borderRadius: 8,
 		paddingHorizontal: 12,
 		paddingVertical: 8,
-		fontSize: 12,
-		color: "#111827",
+		fontSize: 13,
+		color: "#0F172A",
 		marginBottom: 8,
 	},
 	workerButton: {
-		backgroundColor: "#4B5563",
-		borderRadius: 10,
-		paddingVertical: 10,
+		backgroundColor: "#0F172A",
+		borderRadius: 8,
+		paddingVertical: 9,
 		alignItems: "center",
 	},
 	workerButtonText: {
 		color: "#FFFFFF",
-		fontSize: 13,
+		fontSize: 12,
 		fontWeight: "600",
 	},
 	buttonDisabled: {
 		opacity: 0.6,
-	},
-	tokenBox: {
-		marginTop: 12,
-		backgroundColor: "#F3F4F6",
-		padding: 8,
-		borderRadius: 8,
-	},
-	tokenLabel: {
-		fontSize: 10,
-		color: "#6B7280",
-		fontWeight: "600",
-	},
-	tokenValue: {
-		fontSize: 11,
-		color: "#374151",
-		marginTop: 2,
 	},
 });
