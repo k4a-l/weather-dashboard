@@ -18,7 +18,7 @@ export const AlertNoticeCard: React.FC<Props> = React.memo(({ jma }) => {
 	const hasMore = paragraphs.length > 1;
 	const displayText = expanded
 		? jma.overviewText
-		: (paragraphs[0] || jma.overviewText);
+		: paragraphs[0] || jma.overviewText;
 
 	return (
 		<Section>
@@ -59,7 +59,9 @@ export const AlertNoticeCard: React.FC<Props> = React.memo(({ jma }) => {
 							<View
 								style={[
 									styles.chevron,
-									expanded ? styles.chevronUp : styles.chevronDown,
+									expanded
+										? styles.chevronUp
+										: styles.chevronDown,
 								]}
 							/>
 						</View>

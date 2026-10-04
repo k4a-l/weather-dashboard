@@ -8,10 +8,11 @@
 	"scripts": {
 		"lint": "oxlint -c oxlint.json app/src app/App.tsx",
 		"lint:fix": "oxlint -c oxlint.json --fix app/src app/App.tsx",
-		"typecheck:app": "npx tsc --noEmit -p app",
+		"typecheck:app": "npm run --prefix app typecheck",
 		"start:app": "npm start --workspace=app"
 	},
 	"devDependencies": {
+		"oxfmt": "^0.71.0",
 		"oxlint": "^1.42.0"
 	}
 }

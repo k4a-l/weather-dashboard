@@ -77,7 +77,16 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 
 		const getWindDirectionLabel = (deg?: number): string => {
 			if (deg === undefined || isNaN(deg)) return "";
-			const directions = ["北", "北東", "東", "南東", "南", "南西", "西", "北西"];
+			const directions = [
+				"北",
+				"北東",
+				"東",
+				"南東",
+				"南",
+				"南西",
+				"西",
+				"北西",
+			];
 			const index = Math.round(deg / 45) % 8;
 			return directions[index];
 		};
@@ -85,7 +94,9 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 		const formatWind = (speed?: number, deg?: number): string => {
 			if (speed === undefined || isNaN(speed)) return "-";
 			const dir = getWindDirectionLabel(deg);
-			return dir ? `${dir} ${Math.round(speed)}m` : `${Math.round(speed)}m`;
+			return dir
+				? `${dir} ${Math.round(speed)}m`
+				: `${Math.round(speed)}m`;
 		};
 
 		return (
@@ -150,7 +161,8 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 							const isPast = isToday
 								? itemHour < currentHour
 								: date < now;
-							const isCurrent = isToday && itemHour === currentHour;
+							const isCurrent =
+								isToday && itemHour === currentHour;
 							const hasRain =
 								item.pop >= 20 || item.precipitation > 0;
 							const isFirstTomorrowItem =
@@ -160,15 +172,23 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 								<React.Fragment key={index}>
 									{isFirstTomorrowItem && (
 										<View style={styles.daySeparator}>
-											<View style={styles.daySeparatorLine} />
-											<View style={styles.daySeparatorBadge}>
+											<View
+												style={styles.daySeparatorLine}
+											/>
+											<View
+												style={styles.daySeparatorBadge}
+											>
 												<Text
-													style={styles.daySeparatorText}
+													style={
+														styles.daySeparatorText
+													}
 												>
 													明日
 												</Text>
 											</View>
-											<View style={styles.daySeparatorLine} />
+											<View
+												style={styles.daySeparatorLine}
+											/>
 										</View>
 									)}
 
@@ -176,18 +196,24 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 										style={[
 											styles.itemColumn,
 											isPast && styles.itemColumnPast,
-											isCurrent && styles.itemColumnCurrent,
+											isCurrent &&
+												styles.itemColumnCurrent,
 										]}
 									>
 										<View style={styles.cellTime}>
 											<Text
 												style={[
 													styles.timeText,
-													isPast && styles.timeTextPast,
-													isCurrent && styles.timeTextCurrent,
+													isPast &&
+														styles.timeTextPast,
+													isCurrent &&
+														styles.timeTextCurrent,
 												]}
 											>
-												{formatHour(item.time, isCurrent)}
+												{formatHour(
+													item.time,
+													isCurrent,
+												)}
 											</Text>
 										</View>
 
@@ -195,10 +221,13 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 											<Text
 												style={[
 													styles.weatherIcon,
-													isPast && styles.weatherIconPast,
+													isPast &&
+														styles.weatherIconPast,
 												]}
 											>
-												{getWeatherIcon(item.weatherCode)}
+												{getWeatherIcon(
+													item.weatherCode,
+												)}
 											</Text>
 										</View>
 
@@ -206,8 +235,10 @@ export const HourlyTimeline: React.FC<Props> = React.memo(
 											<Text
 												style={[
 													styles.tempText,
-													isPast && styles.tempTextPast,
-													isCurrent && styles.tempTextCurrent,
+													isPast &&
+														styles.tempTextPast,
+													isCurrent &&
+														styles.tempTextCurrent,
 												]}
 											>
 												{Math.round(item.temp)}°

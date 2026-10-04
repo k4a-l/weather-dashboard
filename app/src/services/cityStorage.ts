@@ -60,7 +60,10 @@ export async function removeSavedCity(cityId: string): Promise<CityConfig[]> {
  */
 export async function saveLastSelectedCity(city: CityConfig): Promise<void> {
 	try {
-		await AsyncStorage.setItem(LAST_SELECTED_CITY_KEY, JSON.stringify(city));
+		await AsyncStorage.setItem(
+			LAST_SELECTED_CITY_KEY,
+			JSON.stringify(city),
+		);
 	} catch {
 		// ignore
 	}
@@ -78,6 +81,3 @@ export async function getLastSelectedCity(): Promise<CityConfig | null> {
 		return null;
 	}
 }
-
-
-

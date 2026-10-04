@@ -147,8 +147,8 @@ export default function App() {
 						</View>
 						<Text style={styles.headerMetaText}>
 							{currentCity.latitude.toFixed(2)}°N,{" "}
-							{currentCity.longitude.toFixed(2)}°E • 気象庁 /
-							ECMWF 統合
+							{currentCity.longitude.toFixed(2)}
+							°E • 気象庁 / ECMWF 統合
 						</Text>
 					</View>
 				</TouchableOpacity>

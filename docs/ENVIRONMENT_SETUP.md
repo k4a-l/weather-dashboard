@@ -33,11 +33,11 @@ PowerShellで以下を実行して起動。
 
 ### 事前準備: リリースAPKのビルド
 
-最新コードを反映したAPKパッケージを作成。PowerShellで実行。
+最新コードを反映したAPKパッケージを作成。
 
-```powershell
-cd D:\Data\projects\software\weather-dashboard\app\android
-.\gradlew.bat assembleRelease
+```sh
+cd  /d/Data/projects/software/weather-dashboard/app/android
+./gradlew.bat assembleRelease
 ```
 
 ビルド完了後のAPK出力先:
@@ -49,9 +49,9 @@ PCとAndroidスマートフォンをUSB接続し、USBデバッグが有効な�
 
 #### 接続確認
 
-PowerShellで接続デバイスを確認。
+接続デバイスを確認。
 
-```powershell
+```sh
 adb devices
 ```
 
@@ -61,12 +61,14 @@ adb devices
 
 アプリデータを保持したまま上書きインストール。
 
-```powershell
+```sh
 # デバイスが1台のみ接続されている場合
 adb install -r "D:\Data\projects\software\weather-dashboard\app\android\app\build\outputs\apk\release\app-release.apk"
 
 # 複数デバイス接続時（デバイスID指定）
 adb -s <デバイスID> install -r "D:\Data\projects\software\weather-dashboard\app\android\app\build\outputs\apk\release\app-release.apk"
+
+adb -s c3b95b8a install -r "D:\Data\projects\software\weather-dashboard\app\android\app\build\outputs\apk\release\app-release.apk
 ```
 
 ### ファイル共有による手動インストール
