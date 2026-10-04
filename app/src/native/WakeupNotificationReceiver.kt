@@ -85,6 +85,13 @@ class WakeupNotificationReceiver : BroadcastReceiver() {
         val channelId = "weather-alerts"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+        // 相互クリーンアップ: 今日の通知(1001)を出すときは古い明日通知(1002)を消去、明日の通知(1002)を出すときは今日の通知(1001)を消去
+        if (notificationId == 1001) {
+            notificationManager.cancel(1002)
+        } else if (notificationId == 1002) {
+            notificationManager.cancel(1001)
+        }
+
         // 通知チャネルの作成 (Android 8.0+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -112,6 +119,29 @@ class WakeupNotificationReceiver : BroadcastReceiver() {
 
         val appIcon = BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
 
+        // 消去タイムアウトの算出: 今日の通知は日付が変わった瞬間(翌日00:00:00)に自動消去
+        val now = Calendar.getInstance()
+        val timeoutMillis = if (notificationId == 1001) {
+            val nextMidnight = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            maxOf(1000L, nextMidnight.timeInMillis - now.timeInMillis)
+        } else {
+            // 明日通知は翌日の正午(12:00)まで
+            val tomorrowNoon = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 12)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            maxOf(1000L, tomorrowNoon.timeInMillis - now.timeInMillis)
+        }
+
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.notification_icon)
             .setLargeIcon(appIcon)
@@ -121,6 +151,7 @@ class WakeupNotificationReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
+            .setTimeoutAfter(timeoutMillis)
             .setContentIntent(pendingIntent)
 
         try {

@@ -1,5 +1,6 @@
 package com.weatherdashboard.app
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import com.facebook.react.bridge.Arguments
@@ -74,6 +75,24 @@ class WakeupNotificationModule(reactContext: ReactApplicationContext) :
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("RESET_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun cancelWakeupNotification(target: String, promise: Promise) {
+        try {
+            val notificationManager = reactApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            when (target) {
+                "today" -> notificationManager.cancel(1001)
+                "tomorrow" -> notificationManager.cancel(1002)
+                else -> {
+                    notificationManager.cancel(1001)
+                    notificationManager.cancel(1002)
+                }
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("CANCEL_ERROR", e.message, e)
         }
     }
 

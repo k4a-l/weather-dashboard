@@ -27,6 +27,7 @@ interface WakeupNotificationNativeModule {
 	): Promise<boolean>;
 	triggerTestWakeupNotification(target: string): Promise<boolean>;
 	resetLastNotifiedDate(target: string): Promise<boolean>;
+	cancelWakeupNotification(target: string): Promise<boolean>;
 	getWakeupNotificationStatus(): Promise<WakeupNotificationStatusResult>;
 }
 
@@ -270,6 +271,35 @@ export async function resetWakeupLastNotifiedDateAsync(
 		console.warn("AsyncStorage fallback reset error:", error);
 		return false;
 	}
+}
+
+/**
+ * 配信済みの起床連動通知を消去
+ */
+export async function cancelWakeupNotificationsAsync(
+	target: WakeupTarget | "all" = "all",
+): Promise<boolean> {
+	if (wakeupNativeModule) {
+		try {
+			const success =
+				await wakeupNativeModule.cancelWakeupNotification(target);
+			if (success) return true;
+		} catch (error) {
+			console.warn(
+				"Failed to cancel wakeup notifications via native module:",
+				error,
+			);
+		}
+	}
+	if (isNativeNotificationAvailable && Notifications) {
+		try {
+			await Notifications.dismissAllNotificationsAsync();
+			return true;
+		} catch (error) {
+			console.warn("Notifications dismiss error:", error);
+		}
+	}
+	return false;
 }
 
 /**

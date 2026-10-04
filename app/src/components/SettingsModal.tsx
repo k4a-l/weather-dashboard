@@ -17,6 +17,7 @@ import {
 	resetWakeupLastNotifiedDateAsync,
 	syncWakeupNotificationCacheAsync,
 	getWakeupNotificationStatusAsync,
+	cancelWakeupNotificationsAsync,
 } from "../services/notification";
 
 interface Props {
@@ -92,6 +93,9 @@ export const SettingsModal: React.FC<Props> = React.memo(
 		// 今日の通知 ON/OFF
 		const handleToggleToday = async (enabled: boolean) => {
 			setTodayEnabled(enabled);
+			if (!enabled) {
+				await cancelWakeupNotificationsAsync("today");
+			}
 			await syncWakeupNotificationCacheAsync(
 				notificationPayload.title,
 				notificationPayload.body,
@@ -126,6 +130,9 @@ export const SettingsModal: React.FC<Props> = React.memo(
 		// 明日の通知 ON/OFF
 		const handleToggleTomorrow = async (enabled: boolean) => {
 			setTomorrowEnabled(enabled);
+			if (!enabled) {
+				await cancelWakeupNotificationsAsync("tomorrow");
+			}
 			const title =
 				tomorrowNotificationPayload?.title || "【明日の天気】";
 			const body = tomorrowNotificationPayload?.body || "明日の予報";

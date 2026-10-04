@@ -721,12 +721,18 @@ export async function fetchAggregatedWeatherDirect(
 		? rawClothingAdvice.replace(/^[\p{Emoji}\s]+/u, "")
 		: "";
 
-	// タイトル: 地点・天気・降水確率（一目で傘の要否がわかる）
-	const title = `【${city.name}】${jma.todayWeather}・降水 ${pop}%`;
+	// 日付フォーマット (M/D)
+	const now = new Date();
+	const todayDateStr = `${now.getMonth() + 1}/${now.getDate()}`;
+	const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+	const tomorrowDateStr = `${tomorrowDate.getMonth() + 1}/${tomorrowDate.getDate()}`;
+
+	// タイトル: 地点・日付・天気・降水確率（一目で傘の要否がわかる）
+	const title = `【${city.name} ${todayDateStr}】${jma.todayWeather}・降水 ${pop}%`;
 
 	// 本文: 気温（最高・最低と前日差を重複なく1行で対比）＋ 服装目安 ＋ 注意報
 	const bodyLines: string[] = [
-		`${formatTemperature(maxTemp)} (${formatDiff(maxDiff)}) / ${formatTemperature(minTemp)} (${formatDiff(minDiff)})`,
+		`最高${formatTemperature(maxTemp)} (${formatDiff(maxDiff)})   最低${formatTemperature(minTemp)} (${formatDiff(minDiff)})`,
 	];
 	if (clothingAdvice) {
 		bodyLines.push(`${clothingAdvice}`);
@@ -750,9 +756,9 @@ export async function fetchAggregatedWeatherDirect(
 		? rawTomAdvice.replace(/^[\p{Emoji}\s]+/u, "")
 		: "";
 
-	const tomTitle = `【${city.name} 明日】${tomWeather}・降水 ${tomPop}%`;
+	const tomTitle = `【${city.name} ${tomorrowDateStr} 明日】${tomWeather}・降水 ${tomPop}%`;
 	const tomBodyLines: string[] = [
-		`${formatTemperature(tomMaxTemp)} (今日比 ${formatDiff(tomMaxDiff)}) / ${formatTemperature(tomMinTemp)} (今日比 ${formatDiff(tomMinDiff)})`,
+		`最高${formatTemperature(tomMaxTemp)} (${formatDiff(tomMaxDiff)})   最低${formatTemperature(tomMinTemp)} (${formatDiff(tomMinDiff)})`,
 	];
 	if (tomorrowClothingAdvice) {
 		tomBodyLines.push(`${tomorrowClothingAdvice}`);
