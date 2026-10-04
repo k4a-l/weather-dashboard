@@ -17,353 +17,401 @@ interface Props {
 	onSelectModel: (model: WeatherModelId) => void;
 }
 
-export const TodayComparisonCard: React.FC<Props> = React.memo(({
-	jma,
-	openMeteoJma,
-	openMeteoEcmwf,
-	clothingAdvice,
-	selectedDay,
-	onSelectDay,
-	selectedModel,
-	onSelectModel,
-}) => {
-	const cleanAdvice = clothingAdvice
-		? clothingAdvice.replace(/^[\p{Emoji}\s]+/u, "")
-		: "";
+export const TodayComparisonCard: React.FC<Props> = React.memo(
+	({
+		jma,
+		openMeteoJma,
+		openMeteoEcmwf,
+		clothingAdvice,
+		selectedDay,
+		onSelectDay,
+		selectedModel,
+		onSelectModel,
+	}) => {
+		const cleanAdvice = clothingAdvice
+			? clothingAdvice.replace(/^[\p{Emoji}\s]+/u, "")
+			: "";
 
-	const isToday = selectedDay === "today";
-	const diffPrefix = isToday ? "前日比" : "今日比";
+		const isToday = selectedDay === "today";
+		const diffPrefix = isToday ? "前日比" : "今日比";
 
-	// 選択されたモデルと日時に応じた値の解決
-	let weatherIcon = "";
-	let weatherText = "";
-	let maxTemp = 20;
-	let minTemp = 15;
-	let maxDiff = 0;
-	let minDiff = 0;
-	let popText = "0%";
-	let precipText = "0mm";
-	let maxDiffVsJma: number | undefined;
-	let minDiffVsJma: number | undefined;
+		// 体感温度（最高／最低）
+		const activeModel =
+			selectedModel === "openMeteoEcmwf" ? openMeteoEcmwf : openMeteoJma;
+		const apparentMaxTemp = isToday
+			? activeModel.todayApparentMaxTemp
+			: activeModel.tomorrowApparentMaxTemp;
+		const apparentMinTemp = isToday
+			? activeModel.todayApparentMinTemp
+			: activeModel.tomorrowApparentMinTemp;
 
-	if (isToday) {
-		const baselineMax = jma.todayMaxTemp ?? openMeteoJma.maxTemp;
-		const baselineMin = jma.todayMinTemp ?? openMeteoJma.minTemp;
+		// 選択されたモデルと日時に応じた値の解決
+		let weatherIcon = "";
+		let weatherText = "";
+		let maxTemp = 20;
+		let minTemp = 15;
+		let maxDiff = 0;
+		let minDiff = 0;
+		let popText = "0%";
+		let precipText = "0mm";
+		let maxDiffVsJma: number | undefined;
+		let minDiffVsJma: number | undefined;
 
-		if (selectedModel === "jmaOfficial") {
-			weatherIcon = getWeatherIcon(jma.todayWeather);
-			weatherText = jma.todayWeather;
-			maxTemp = baselineMax;
-			minTemp = baselineMin;
-			maxDiff = openMeteoJma.maxTempDiff;
-			minDiff = openMeteoJma.minTempDiff;
-			popText =
-				jma.todayPops.length > 0
-					? `${jma.todayPops[jma.todayPops.length - 1]}%`
-					: `${openMeteoJma.popMax}%`;
-			precipText =
-				openMeteoJma.precipitationSum !== undefined
-					? `${openMeteoJma.precipitationSum}mm`
-					: "0mm";
-		} else if (selectedModel === "openMeteoJma") {
-			weatherIcon = getWeatherIcon(openMeteoJma.todayWeatherCode);
-			weatherText = openMeteoJma.todayWeatherText;
-			maxTemp = openMeteoJma.maxTemp;
-			minTemp = openMeteoJma.minTemp;
-			maxDiff = openMeteoJma.maxTempDiff;
-			minDiff = openMeteoJma.minTempDiff;
-			popText = `${openMeteoJma.popMax}%`;
-			precipText = `${openMeteoJma.precipitationSum ?? 0}mm`;
-			if (jma.todayMaxTemp !== undefined) {
+		if (isToday) {
+			const baselineMax = jma.todayMaxTemp ?? openMeteoJma.maxTemp;
+			let baselineMin = jma.todayMinTemp ?? openMeteoJma.minTemp;
+			if (
+				baselineMin === baselineMax &&
+				openMeteoJma.minTemp !== baselineMax
+			) {
+				baselineMin = openMeteoJma.minTemp;
+			}
+
+			if (selectedModel === "jmaOfficial") {
+				weatherIcon = getWeatherIcon(jma.todayWeather);
+				weatherText = jma.todayWeather;
+				maxTemp = baselineMax;
+				minTemp = baselineMin;
+				maxDiff = openMeteoJma.maxTempDiff;
+				minDiff = openMeteoJma.minTempDiff;
+				popText =
+					jma.todayPops.length > 0
+						? `${jma.todayPops[jma.todayPops.length - 1]}%`
+						: `${openMeteoJma.popMax}%`;
+				precipText =
+					openMeteoJma.precipitationSum !== undefined
+						? `${openMeteoJma.precipitationSum}mm`
+						: "0mm";
+			} else if (selectedModel === "openMeteoJma") {
+				weatherIcon = getWeatherIcon(openMeteoJma.todayWeatherCode);
+				weatherText = openMeteoJma.todayWeatherText;
+				maxTemp = openMeteoJma.maxTemp;
+				minTemp = openMeteoJma.minTemp;
+				maxDiff = openMeteoJma.maxTempDiff;
+				minDiff = openMeteoJma.minTempDiff;
+				popText = `${openMeteoJma.popMax}%`;
+				precipText = `${openMeteoJma.precipitationSum ?? 0}mm`;
+				if (jma.todayMaxTemp !== undefined) {
+					maxDiffVsJma =
+						Math.round(
+							(openMeteoJma.maxTemp - jma.todayMaxTemp) * 10,
+						) / 10;
+				}
+				if (jma.todayMinTemp !== undefined) {
+					minDiffVsJma =
+						Math.round(
+							(openMeteoJma.minTemp - jma.todayMinTemp) * 10,
+						) / 10;
+				}
+			} else {
+				weatherIcon = getWeatherIcon(openMeteoEcmwf.todayWeatherCode);
+				weatherText = openMeteoEcmwf.todayWeatherText;
+				maxTemp = openMeteoEcmwf.maxTemp;
+				minTemp = openMeteoEcmwf.minTemp;
+				maxDiff = openMeteoEcmwf.maxTempDiff;
+				minDiff = openMeteoEcmwf.minTempDiff;
+				popText = `${openMeteoEcmwf.popMax}%`;
+				precipText = `${openMeteoEcmwf.precipitationSum ?? 0}mm`;
 				maxDiffVsJma =
-					Math.round((openMeteoJma.maxTemp - jma.todayMaxTemp) * 10) /
+					Math.round((openMeteoEcmwf.maxTemp - baselineMax) * 10) /
 					10;
-			}
-			if (jma.todayMinTemp !== undefined) {
 				minDiffVsJma =
-					Math.round((openMeteoJma.minTemp - jma.todayMinTemp) * 10) /
+					Math.round((openMeteoEcmwf.minTemp - baselineMin) * 10) /
 					10;
 			}
 		} else {
-			weatherIcon = getWeatherIcon(openMeteoEcmwf.todayWeatherCode);
-			weatherText = openMeteoEcmwf.todayWeatherText;
-			maxTemp = openMeteoEcmwf.maxTemp;
-			minTemp = openMeteoEcmwf.minTemp;
-			maxDiff = openMeteoEcmwf.maxTempDiff;
-			minDiff = openMeteoEcmwf.minTempDiff;
-			popText = `${openMeteoEcmwf.popMax}%`;
-			precipText = `${openMeteoEcmwf.precipitationSum ?? 0}mm`;
-			maxDiffVsJma =
-				Math.round((openMeteoEcmwf.maxTemp - baselineMax) * 10) / 10;
-			minDiffVsJma =
-				Math.round((openMeteoEcmwf.minTemp - baselineMin) * 10) / 10;
+			// 明日
+			const baselineTomMax =
+				jma.tomorrowMaxTemp ?? openMeteoJma.tomorrowMaxTemp;
+			let baselineTomMin =
+				jma.tomorrowMinTemp ?? openMeteoJma.tomorrowMinTemp;
+			if (
+				baselineTomMin === baselineTomMax &&
+				openMeteoJma.tomorrowMinTemp !== baselineTomMax
+			) {
+				baselineTomMin = openMeteoJma.tomorrowMinTemp;
+			}
+
+			if (selectedModel === "jmaOfficial") {
+				const jmaTomWeather = jma.tomorrowWeather || "くもり";
+				weatherIcon = getWeatherIcon(jmaTomWeather);
+				weatherText = jmaTomWeather;
+				maxTemp = baselineTomMax;
+				minTemp = baselineTomMin;
+				maxDiff = openMeteoJma.tomorrowMaxTempDiff;
+				minDiff = openMeteoJma.tomorrowMinTempDiff;
+				popText =
+					jma.tomorrowPops && jma.tomorrowPops.length > 0
+						? `${jma.tomorrowPops[0]}%`
+						: `${openMeteoJma.tomorrowPopMax}%`;
+				precipText =
+					openMeteoJma.tomorrowPrecipitationSum !== undefined
+						? `${openMeteoJma.tomorrowPrecipitationSum}mm`
+						: "0mm";
+			} else if (selectedModel === "openMeteoJma") {
+				weatherIcon = getWeatherIcon(openMeteoJma.tomorrowWeatherCode);
+				weatherText = openMeteoJma.tomorrowWeatherText;
+				maxTemp = openMeteoJma.tomorrowMaxTemp;
+				minTemp = openMeteoJma.tomorrowMinTemp;
+				maxDiff = openMeteoJma.tomorrowMaxTempDiff;
+				minDiff = openMeteoJma.tomorrowMinTempDiff;
+				popText = `${openMeteoJma.tomorrowPopMax}%`;
+				precipText = `${openMeteoJma.tomorrowPrecipitationSum ?? 0}mm`;
+				maxDiffVsJma =
+					Math.round(
+						(openMeteoJma.tomorrowMaxTemp - baselineTomMax) * 10,
+					) / 10;
+				minDiffVsJma =
+					Math.round(
+						(openMeteoJma.tomorrowMinTemp - baselineTomMin) * 10,
+					) / 10;
+			} else {
+				weatherIcon = getWeatherIcon(
+					openMeteoEcmwf.tomorrowWeatherCode,
+				);
+				weatherText = openMeteoEcmwf.tomorrowWeatherText;
+				maxTemp = openMeteoEcmwf.tomorrowMaxTemp;
+				minTemp = openMeteoEcmwf.tomorrowMinTemp;
+				maxDiff = openMeteoEcmwf.tomorrowMaxTempDiff;
+				minDiff = openMeteoEcmwf.tomorrowMinTempDiff;
+				popText = `${openMeteoEcmwf.tomorrowPopMax}%`;
+				precipText = `${openMeteoEcmwf.tomorrowPrecipitationSum ?? 0}mm`;
+				maxDiffVsJma =
+					Math.round(
+						(openMeteoEcmwf.tomorrowMaxTemp - baselineTomMax) * 10,
+					) / 10;
+				minDiffVsJma =
+					Math.round(
+						(openMeteoEcmwf.tomorrowMinTemp - baselineTomMin) * 10,
+					) / 10;
+			}
 		}
-	} else {
-		// 明日
-		const baselineTomMax =
-			jma.tomorrowMaxTemp ?? openMeteoJma.tomorrowMaxTemp;
-		const baselineTomMin =
-			jma.tomorrowMinTemp ?? openMeteoJma.tomorrowMinTemp;
 
-		if (selectedModel === "jmaOfficial") {
-			const jmaTomWeather = jma.tomorrowWeather || "くもり";
-			weatherIcon = getWeatherIcon(jmaTomWeather);
-			weatherText = jmaTomWeather;
-			maxTemp = baselineTomMax;
-			minTemp = baselineTomMin;
-			maxDiff = openMeteoJma.tomorrowMaxTempDiff;
-			minDiff = openMeteoJma.tomorrowMinTempDiff;
-			popText =
-				jma.tomorrowPops && jma.tomorrowPops.length > 0
-					? `${jma.tomorrowPops[0]}%`
-					: `${openMeteoJma.tomorrowPopMax}%`;
-			precipText =
-				openMeteoJma.tomorrowPrecipitationSum !== undefined
-					? `${openMeteoJma.tomorrowPrecipitationSum}mm`
-					: "0mm";
-		} else if (selectedModel === "openMeteoJma") {
-			weatherIcon = getWeatherIcon(openMeteoJma.tomorrowWeatherCode);
-			weatherText = openMeteoJma.tomorrowWeatherText;
-			maxTemp = openMeteoJma.tomorrowMaxTemp;
-			minTemp = openMeteoJma.tomorrowMinTemp;
-			maxDiff = openMeteoJma.tomorrowMaxTempDiff;
-			minDiff = openMeteoJma.tomorrowMinTempDiff;
-			popText = `${openMeteoJma.tomorrowPopMax}%`;
-			precipText = `${openMeteoJma.tomorrowPrecipitationSum ?? 0}mm`;
-			maxDiffVsJma =
-				Math.round(
-					(openMeteoJma.tomorrowMaxTemp - baselineTomMax) * 10,
-				) / 10;
-			minDiffVsJma =
-				Math.round(
-					(openMeteoJma.tomorrowMinTemp - baselineTomMin) * 10,
-				) / 10;
-		} else {
-			weatherIcon = getWeatherIcon(openMeteoEcmwf.tomorrowWeatherCode);
-			weatherText = openMeteoEcmwf.tomorrowWeatherText;
-			maxTemp = openMeteoEcmwf.tomorrowMaxTemp;
-			minTemp = openMeteoEcmwf.tomorrowMinTemp;
-			maxDiff = openMeteoEcmwf.tomorrowMaxTempDiff;
-			minDiff = openMeteoEcmwf.tomorrowMinTempDiff;
-			popText = `${openMeteoEcmwf.tomorrowPopMax}%`;
-			precipText = `${openMeteoEcmwf.tomorrowPrecipitationSum ?? 0}mm`;
-			maxDiffVsJma =
-				Math.round(
-					(openMeteoEcmwf.tomorrowMaxTemp - baselineTomMax) * 10,
-				) / 10;
-			minDiffVsJma =
-				Math.round(
-					(openMeteoEcmwf.tomorrowMinTemp - baselineTomMin) * 10,
-				) / 10;
-		}
-	}
+		const formatDiff = (diff: number, prefix: string) => {
+			if (diff > 0) return `${prefix} +${diff.toFixed(1)}°`;
+			if (diff < 0) return `${prefix} ${diff.toFixed(1)}°`;
+			return `${prefix} ±0°`;
+		};
 
-	const formatDiff = (diff: number, prefix: string) => {
-		if (diff > 0) return `${prefix} ▲ +${diff.toFixed(1)}°`;
-		if (diff < 0) return `${prefix} ▼ ${diff.toFixed(1)}°`;
-		return `${prefix} ±0°`;
-	};
+		const diffColor = (diff: number) => {
+			if (diff <= -1.5) return "#2563EB";
+			if (diff >= 1.5) return "#DC2626";
+			return "#64748B";
+		};
 
-	const diffColor = (diff: number) => {
-		if (diff <= -1.5) return "#2563EB";
-		if (diff >= 1.5) return "#DC2626";
-		return "#64748B";
-	};
-
-	return (
-		<Section style={styles.sectionContainer}>
-			{/* 日付切り替え & 予報モデル切り替え */}
-			<View style={styles.selectorsRow}>
-				{/* 今日 | 明日 */}
-				<View style={styles.daySelector}>
-					<Pressable
-						style={[
-							styles.dayTab,
-							selectedDay === "today" && styles.dayTabActive,
-						]}
-						onPress={() => onSelectDay("today")}
-						hitSlop={6}
-					>
-						<Text
+		return (
+			<Section style={styles.sectionContainer}>
+				{/* 日付切り替え & 予報モデル切り替え */}
+				<View style={styles.selectorsRow}>
+					{/* 今日 | 明日 */}
+					<View style={styles.daySelector}>
+						<Pressable
 							style={[
-								styles.dayTabText,
-								selectedDay === "today" &&
-									styles.dayTabTextActive,
+								styles.dayTab,
+								selectedDay === "today" && styles.dayTabActive,
 							]}
+							onPress={() => onSelectDay("today")}
+							hitSlop={6}
 						>
-							今日
-						</Text>
-					</Pressable>
-					<Pressable
-						style={[
-							styles.dayTab,
-							selectedDay === "tomorrow" && styles.dayTabActive,
-						]}
-						onPress={() => onSelectDay("tomorrow")}
-						hitSlop={6}
-					>
-						<Text
+							<Text
+								style={[
+									styles.dayTabText,
+									selectedDay === "today" &&
+										styles.dayTabTextActive,
+								]}
+							>
+								今日
+							</Text>
+						</Pressable>
+						<Pressable
 							style={[
-								styles.dayTabText,
+								styles.dayTab,
 								selectedDay === "tomorrow" &&
-									styles.dayTabTextActive,
+									styles.dayTabActive,
 							]}
+							onPress={() => onSelectDay("tomorrow")}
+							hitSlop={6}
 						>
-							明日
-						</Text>
-					</Pressable>
-				</View>
+							<Text
+								style={[
+									styles.dayTabText,
+									selectedDay === "tomorrow" &&
+										styles.dayTabTextActive,
+								]}
+							>
+								明日
+							</Text>
+						</Pressable>
+					</View>
 
-				{/* モデル切り替えピル */}
-				<View style={styles.modelSelector}>
-					<Pressable
-						style={[
-							styles.modelPill,
-							selectedModel === "jmaOfficial" &&
-								styles.modelPillActive,
-						]}
-						onPress={() => onSelectModel("jmaOfficial")}
-						hitSlop={6}
-					>
-						<Text
+					{/* モデル切り替えピル */}
+					<View style={styles.modelSelector}>
+						<Pressable
 							style={[
-								styles.modelPillText,
+								styles.modelPill,
 								selectedModel === "jmaOfficial" &&
-									styles.modelPillTextActive,
+									styles.modelPillActive,
 							]}
+							onPress={() => onSelectModel("jmaOfficial")}
+							hitSlop={6}
 						>
-							気象庁公式
-						</Text>
-					</Pressable>
-					<Pressable
-						style={[
-							styles.modelPill,
-							selectedModel === "openMeteoJma" &&
-								styles.modelPillActive,
-						]}
-						onPress={() => onSelectModel("openMeteoJma")}
-						hitSlop={6}
-					>
-						<Text
+							<Text
+								style={[
+									styles.modelPillText,
+									selectedModel === "jmaOfficial" &&
+										styles.modelPillTextActive,
+								]}
+							>
+								気象庁公式
+							</Text>
+						</Pressable>
+						<Pressable
 							style={[
-								styles.modelPillText,
+								styles.modelPill,
 								selectedModel === "openMeteoJma" &&
-									styles.modelPillTextActive,
+									styles.modelPillActive,
 							]}
+							onPress={() => onSelectModel("openMeteoJma")}
+							hitSlop={6}
 						>
-							JMA数値
-						</Text>
-					</Pressable>
-					<Pressable
-						style={[
-							styles.modelPill,
-							selectedModel === "openMeteoEcmwf" &&
-								styles.modelPillActive,
-						]}
-						onPress={() => onSelectModel("openMeteoEcmwf")}
-						hitSlop={6}
-					>
-						<Text
+							<Text
+								style={[
+									styles.modelPillText,
+									selectedModel === "openMeteoJma" &&
+										styles.modelPillTextActive,
+								]}
+							>
+								JMA数値
+							</Text>
+						</Pressable>
+						<Pressable
 							style={[
-								styles.modelPillText,
+								styles.modelPill,
 								selectedModel === "openMeteoEcmwf" &&
-									styles.modelPillTextActive,
+									styles.modelPillActive,
 							]}
+							onPress={() => onSelectModel("openMeteoEcmwf")}
+							hitSlop={6}
 						>
-							ECMWF欧州
-						</Text>
-					</Pressable>
-				</View>
-			</View>
-
-			{/* メイン天気サマリー */}
-			<View style={styles.heroRow}>
-				{/* 天気アイコンとテキスト */}
-				<View style={styles.weatherInfoCol}>
-					<View style={styles.iconTitleRow}>
-						<Text style={styles.heroIcon}>{weatherIcon}</Text>
-						<Text style={styles.heroWeatherText} numberOfLines={2}>
-							{weatherText}
-						</Text>
-					</View>
-
-					<View style={styles.precipRow}>
-						<Text style={styles.precipStat}>降水 {popText}</Text>
-						<Text style={styles.precipDivider}>・</Text>
-						<Text style={styles.precipStat}>雨量 {precipText}</Text>
+							<Text
+								style={[
+									styles.modelPillText,
+									selectedModel === "openMeteoEcmwf" &&
+										styles.modelPillTextActive,
+								]}
+							>
+								ECMWF欧州
+							</Text>
+						</Pressable>
 					</View>
 				</View>
 
-				{/* 気温表示（最高・最低 双方の差分） */}
-				<View style={styles.tempBlock}>
-					<View style={styles.tempCol}>
-						<Text style={styles.tempSubLabel}>最高</Text>
-						<Text style={styles.heroMaxTemp}>
-							{maxTemp.toFixed(1)}°
-						</Text>
+				{/* メイン天気サマリー */}
+				<View style={styles.heroRow}>
+					{/* 天気アイコンとテキスト */}
+					<View style={styles.weatherInfoCol}>
+						<View style={styles.iconTitleRow}>
+							<Text style={styles.heroIcon}>{weatherIcon}</Text>
+							<Text
+								style={styles.heroWeatherText}
+								numberOfLines={2}
+							>
+								{weatherText}
+							</Text>
+						</View>
+
+						<View style={styles.precipRow}>
+							<Text style={styles.precipStat}>
+								降水 {popText}
+							</Text>
+							<Text style={styles.precipDivider}>・</Text>
+							<Text style={styles.precipStat}>
+								雨量 {precipText}
+							</Text>
+						</View>
+					</View>
+
+					{/* 気温表示（最高・最低 双方の差分および体感） */}
+					<View style={styles.tempBlock}>
+						<View style={styles.tempCol}>
+							<Text style={styles.tempSubLabel}>最高</Text>
+							<Text style={styles.heroMaxTemp}>
+								{maxTemp.toFixed(1)}°
+							</Text>
+							{apparentMaxTemp !== undefined && (
+								<Text style={styles.apparentTempSub}>
+									体感 {apparentMaxTemp.toFixed(1)}°
+								</Text>
+							)}
+							<Text
+								style={[
+									styles.diffText,
+									{ color: diffColor(maxDiff) },
+								]}
+							>
+								{formatDiff(maxDiff, diffPrefix)}
+							</Text>
+						</View>
+
+						<View style={styles.tempSeparator} />
+
+						<View style={styles.tempCol}>
+							<Text style={styles.tempSubLabel}>最低</Text>
+							<Text style={styles.heroMinTemp}>
+								{minTemp.toFixed(1)}°
+							</Text>
+							{apparentMinTemp !== undefined && (
+								<Text style={styles.apparentTempSub}>
+									体感 {apparentMinTemp.toFixed(1)}°
+								</Text>
+							)}
+							<Text
+								style={[
+									styles.diffText,
+									{ color: diffColor(minDiff) },
+								]}
+							>
+								{formatDiff(minDiff, diffPrefix)}
+							</Text>
+						</View>
+					</View>
+				</View>
+
+				{/* 気象庁公式との差異注記（モデル選択時） */}
+				{maxDiffVsJma !== undefined && minDiffVsJma !== undefined && (
+					<View style={styles.modelDiffRow}>
+						<Text style={styles.modelDiffLabel}>気象庁公式比</Text>
 						<Text
 							style={[
-								styles.diffText,
-								{ color: diffColor(maxDiff) },
+								styles.modelDiffVal,
+								{ color: diffColor(maxDiffVsJma) },
 							]}
 						>
-							{formatDiff(maxDiff, diffPrefix)}
+							最高 {formatDiff(maxDiffVsJma, "")}
 						</Text>
-					</View>
-
-					<View style={styles.tempSeparator} />
-
-					<View style={styles.tempCol}>
-						<Text style={styles.tempSubLabel}>最低</Text>
-						<Text style={styles.heroMinTemp}>
-							{minTemp.toFixed(1)}°
-						</Text>
+						<Text style={styles.modelDiffDivider}>/</Text>
 						<Text
 							style={[
-								styles.diffText,
-								{ color: diffColor(minDiff) },
+								styles.modelDiffVal,
+								{ color: diffColor(minDiffVsJma) },
 							]}
 						>
-							{formatDiff(minDiff, diffPrefix)}
+							最低 {formatDiff(minDiffVsJma, "")}
 						</Text>
 					</View>
-				</View>
-			</View>
+				)}
 
-			{/* 気象庁公式との差異注記（モデル選択時） */}
-			{maxDiffVsJma !== undefined && minDiffVsJma !== undefined && (
-				<View style={styles.modelDiffRow}>
-					<Text style={styles.modelDiffLabel}>気象庁公式比</Text>
-					<Text
-						style={[
-							styles.modelDiffVal,
-							{ color: diffColor(maxDiffVsJma) },
-						]}
-					>
-						最高 {formatDiff(maxDiffVsJma, "")}
-					</Text>
-					<Text style={styles.modelDiffDivider}>/</Text>
-					<Text
-						style={[
-							styles.modelDiffVal,
-							{ color: diffColor(minDiffVsJma) },
-						]}
-					>
-						最低 {formatDiff(minDiffVsJma, "")}
-					</Text>
-				</View>
-			)}
-
-			{/* 服装目安 */}
-			{cleanAdvice ? (
-				<View style={styles.adviceRow}>
-					<Text style={styles.adviceLabel}>服装目安</Text>
-					<Text style={styles.adviceText}>{cleanAdvice}</Text>
-				</View>
-			) : null}
-		</Section>
-	);
-});
+				{/* 服装目安 */}
+				{cleanAdvice ? (
+					<View style={styles.adviceRow}>
+						<Text style={styles.adviceLabel}>服装目安</Text>
+						<Text style={styles.adviceText}>{cleanAdvice}</Text>
+					</View>
+				) : null}
+			</Section>
+		);
+	},
+);
 
 const styles = StyleSheet.create({
 	sectionContainer: {
@@ -501,8 +549,14 @@ const styles = StyleSheet.create({
 	},
 	tempSeparator: {
 		width: 1,
-		height: 32,
+		height: 44,
 		backgroundColor: "#E2E8F0",
+	},
+	apparentTempSub: {
+		fontSize: 10,
+		color: "#64748B",
+		fontWeight: "500",
+		marginTop: 1,
 	},
 	diffText: {
 		fontSize: 10,

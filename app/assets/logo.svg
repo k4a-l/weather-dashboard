@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%" fill="none">
+  <!-- 定義: 洗練されたモダンなグラデーションとシャドウ -->
+  <defs>
+    <!-- 太陽のグラデーション: 鮮やかで温かみのあるゴールド〜アンバー -->
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+
+    <!-- 前面雲のグラデーション: クリーンで上質なスカイ〜ロイヤルブルー -->
+    <linearGradient id="cloudFrontGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="60%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+
+    <!-- 背面雲のグラデーション: 奥行きを生むディープブルー -->
+    <linearGradient id="cloudBackGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#93C5FD" />
+      <stop offset="100%" stop-color="#3B82F6" />
+    </linearGradient>
+
+    <!-- 雨滴/アクセントのグラデーション -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#0284C7" />
+    </linearGradient>
+
+    <!-- 柔らかいドロップシャドウ (白背景でも立体感・モダンさが際立つ) -->
+    <filter id="softShadow" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0F172A" flood-opacity="0.12" />
+    </filter>
+    <filter id="sunGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#F59E0B" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- 1. 太陽シンボル (幾何学サークル + グロー) -->
+  <circle
+    cx="332"
+    cy="188"
+    r="96"
+    fill="url(#sunGrad)"
+    filter="url(#sunGlow)"
+  />
+
+  <!-- 2. 背面の雲 (奥行きレイヤー) -->
+  <path
+    d="M230 200 C230 170 252 146 282 146 C308 146 330 165 333 191 C343 186 355 184 368 184 C403 184 432 213 432 248 C432 283 403 312 368 312 L220 312 C185 312 156 283 156 248 C156 215 181 188 213 184 C218 193 224 197 230 200 Z"
+    fill="url(#cloudBackGrad)"
+    opacity="0.45"
+  />
+
+  <!-- 3. 前面の雲 (洗練された滑らかなモダンフォルム) -->
+  <path
+    d="M172 384 L364 384 C412.599 384 452 344.599 452 296 C452 250.627 417.653 213.295 373.491 208.777 C365.176 147.962 313.149 100 248 100 C193.303 100 147.24 133.784 129.569 181.936 C89.544 191.139 60 227.143 60 270 C60 321.915 102.085 364 154 364 C160.088 364 166.104 363.385 172 364 Z"
+    fill="url(#cloudFrontGrad)"
+    filter="url(#softShadow)"
+  />
+
+  <!-- 4. ミニマルなハイライトリフレクション (グラスモーフィズム風の微細なアクセント) -->
+  <path
+    d="M248 116 C296 116 337 151 346 198 C338 200 328 202 316 208 C280 226 250 254 230 286 C210 250 178 222 138 204 C153 152 196 116 248 116 Z"
+    fill="#FFFFFF"
+    opacity="0.18"
+  />
+
+  <!-- 5. モダン・ドロップレット / 風の軌跡 (幾何学的で軽やかなアクセント) -->
+  <g filter="url(#softShadow)">
+    <rect x="180" y="416" width="14" height="38" rx="7" fill="url(#accentGrad)" transform="rotate(18 180 416)" />
+    <rect x="254" y="416" width="14" height="48" rx="7" fill="url(#accentGrad)" transform="rotate(18 254 416)" />
+    <rect x="328" y="416" width="14" height="34" rx="7" fill="url(#accentGrad)" transform="rotate(18 328 416)" />
+  </g>
+</svg>

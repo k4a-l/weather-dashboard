@@ -1,5 +1,5 @@
 import { Platform, Alert, NativeModules } from "react-native";
-import * as Notifications from "expo-notifications";
+import type * as NotificationsType from "expo-notifications";
 import { NotificationPayload } from "../types";
 
 interface WakeupNotificationNativeModule {
@@ -23,9 +23,11 @@ interface WakeupNotificationNativeModule {
 const wakeupNativeModule: WakeupNotificationNativeModule | null =
     NativeModules.WakeupNotificationModule ?? null;
 
+let Notifications: typeof NotificationsType | null = null;
 let isNativeNotificationAvailable = false;
 
 try {
+    Notifications = require("expo-notifications");
     if (Notifications && typeof Notifications.setNotificationHandler === "function") {
         Notifications.setNotificationHandler({
             handleNotification: async () => ({
@@ -42,18 +44,27 @@ try {
     console.warn("expo-notifications native module is not available. Gracefully falling back.");
 }
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const STORAGE_KEY_WAKEUP_ENABLED = "@wakeup_notif_enabled";
+const STORAGE_KEY_WAKEUP_START_HOUR = "@wakeup_notif_start_hour";
+const STORAGE_KEY_WAKEUP_LAST_DATE = "@wakeup_notif_last_date";
+const STORAGE_KEY_WAKEUP_TITLE = "@wakeup_notif_title";
+const STORAGE_KEY_WAKEUP_BODY = "@wakeup_notif_body";
+
 export const isExpoGoEnvironment = !isNativeNotificationAvailable;
 
 export async function setupNotificationChannelAsync(): Promise<void> {
-    if (isNativeNotificationAvailable && Platform.OS === "android") {
+    const notif = Notifications;
+    if (isNativeNotificationAvailable && notif && Platform.OS === "android") {
         try {
-            await Notifications.setNotificationChannelAsync("weather-alerts", {
+            await notif.setNotificationChannelAsync("weather-alerts", {
                 name: "天気アラート",
                 description: "毎日の天気予報と前日差、急変注意報をお知らせします",
-                importance: Notifications.AndroidImportance.MAX,
+                importance: notif.AndroidImportance.MAX,
                 vibrationPattern: [0, 250, 250, 250],
                 lightColor: "#3B82F6",
-                lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+                lockscreenVisibility: notif.AndroidNotificationVisibility.PUBLIC,
             });
         } catch (error) {
             console.warn("Notification channel setup warning:", error);
@@ -62,15 +73,16 @@ export async function setupNotificationChannelAsync(): Promise<void> {
 }
 
 export async function requestNotificationPermissionsAsync(): Promise<boolean> {
-    if (!isNativeNotificationAvailable) {
+    const notif = Notifications;
+    if (!isNativeNotificationAvailable || !notif) {
         return false;
     }
     try {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        const { status: existingStatus } = await notif.getPermissionsAsync();
         let finalStatus = existingStatus;
 
         if (existingStatus !== "granted") {
-            const { status } = await Notifications.requestPermissionsAsync();
+            const { status } = await notif.requestPermissionsAsync();
             finalStatus = status;
         }
 
@@ -82,7 +94,8 @@ export async function requestNotificationPermissionsAsync(): Promise<boolean> {
 }
 
 export async function getExpoPushTokenAsync(): Promise<string | null> {
-    if (!isNativeNotificationAvailable) {
+    const notif = Notifications;
+    if (!isNativeNotificationAvailable || !notif) {
         return null;
     }
     try {
@@ -90,7 +103,7 @@ export async function getExpoPushTokenAsync(): Promise<string | null> {
         if (!granted) {
             return null;
         }
-        const tokenData = await Notifications.getExpoPushTokenAsync();
+        const tokenData = await notif.getExpoPushTokenAsync();
         return tokenData.data;
     } catch (error) {
         console.warn("Failed to get push token:", error);
@@ -99,9 +112,10 @@ export async function getExpoPushTokenAsync(): Promise<string | null> {
 }
 
 export async function sendLocalNotificationAsync(payload: NotificationPayload): Promise<void> {
-    if (isNativeNotificationAvailable) {
+    const notif = Notifications;
+    if (isNativeNotificationAvailable && notif) {
         await setupNotificationChannelAsync();
-        await Notifications.scheduleNotificationAsync({
+        await notif.scheduleNotificationAsync({
             content: {
                 title: payload.title,
                 body: payload.body,
@@ -111,16 +125,15 @@ export async function sendLocalNotificationAsync(payload: NotificationPayload): 
             trigger: null,
         });
     } else {
-        // Expo Go 上でのプレビュー表示
         Alert.alert(
-            `🔔 [通知プレビュー] ${payload.title}`,
-            `${payload.body}\n\n※Expo Go環境のためダイアログプレビューを表示しています。実機通知バーへの配信には開発ビルド（npx expo run:android）を使用します。`
+            `【通知テスト】${payload.title}`,
+            `${payload.body}\n\n（※ネイティブモジュール未リンク環境のためダイアログで表示しています）`
         );
     }
 }
 
 /**
- * ロック解除・起床連動通知用のネイティブ設定・天気キャッシュを同期
+ * ロック解除・起床連動通知用の設定・天気キャッシュを同期
  */
 export async function syncWakeupNotificationCacheAsync(
     title: string,
@@ -128,59 +141,113 @@ export async function syncWakeupNotificationCacheAsync(
     startHour = 6,
     enabled = true
 ): Promise<boolean> {
-    if (!wakeupNativeModule) {
-        return false;
+    if (wakeupNativeModule) {
+        try {
+            return await wakeupNativeModule.syncWakeupNotificationData(title, body, startHour, enabled);
+        } catch (error) {
+            console.warn("Failed to sync wakeup notification cache via native module:", error);
+        }
     }
+    // フォールバック: AsyncStorage に保存
     try {
-        return await wakeupNativeModule.syncWakeupNotificationData(title, body, startHour, enabled);
+        await AsyncStorage.multiSet([
+            [STORAGE_KEY_WAKEUP_TITLE, title],
+            [STORAGE_KEY_WAKEUP_BODY, body],
+            [STORAGE_KEY_WAKEUP_START_HOUR, String(startHour)],
+            [STORAGE_KEY_WAKEUP_ENABLED, String(enabled)],
+        ]);
+        return true;
     } catch (error) {
-        console.warn("Failed to sync wakeup notification cache:", error);
+        console.warn("AsyncStorage fallback save error:", error);
         return false;
     }
 }
 
 /**
- * 起床連動通知のテスト発火（指定時刻制限をバイパスして即時通知をテスト）
+ * 起床連動通知のテスト発火
  */
 export async function triggerTestWakeupNotificationAsync(): Promise<boolean> {
-    if (!wakeupNativeModule) {
-        return false;
+    if (wakeupNativeModule) {
+        try {
+            const success = await wakeupNativeModule.triggerTestWakeupNotification();
+            if (success) return true;
+        } catch (error) {
+            console.warn("Failed to trigger test wakeup notification via native module:", error);
+        }
     }
-    try {
-        return await wakeupNativeModule.triggerTestWakeupNotification();
-    } catch (error) {
-        console.warn("Failed to trigger test wakeup notification:", error);
-        return false;
-    }
+    // フォールバック: 保存されたキャッシュまたはデフォルト値で通知表示
+    const title = (await AsyncStorage.getItem(STORAGE_KEY_WAKEUP_TITLE)) || "【起床連動テスト】今日の天気";
+    const body = (await AsyncStorage.getItem(STORAGE_KEY_WAKEUP_BODY)) || "朝の画面ロック解除時に配信される最新天気予報です。";
+    await sendLocalNotificationAsync({ title, body });
+    return true;
 }
 
 /**
- * 本日の通知済み記録をリセット（テストや再通知用）
+ * 本日の通知済み記録をリセット
  */
 export async function resetWakeupLastNotifiedDateAsync(): Promise<boolean> {
-    if (!wakeupNativeModule) {
-        return false;
+    if (wakeupNativeModule) {
+        try {
+            const success = await wakeupNativeModule.resetLastNotifiedDate();
+            if (success) return true;
+        } catch (error) {
+            console.warn("Failed to reset wakeup notification date via native module:", error);
+        }
     }
+    // フォールバック: AsyncStorage の日付をクリア
     try {
-        return await wakeupNativeModule.resetLastNotifiedDate();
+        await AsyncStorage.removeItem(STORAGE_KEY_WAKEUP_LAST_DATE);
+        return true;
     } catch (error) {
-        console.warn("Failed to reset wakeup notification date:", error);
+        console.warn("AsyncStorage fallback reset error:", error);
         return false;
     }
 }
 
 /**
- * 起床通知のネイティブ設定状態を取得
+ * 起床連動通知の現在の設定・ステータスを取得
  */
-export async function getWakeupNotificationStatusAsync() {
-    if (!wakeupNativeModule) {
-        return null;
+export async function getWakeupNotificationStatusAsync(): Promise<{
+    enabled: boolean;
+    startHour: number;
+    lastNotifiedDate: string;
+    cachedTitle: string;
+    cachedBody: string;
+}> {
+    if (wakeupNativeModule) {
+        try {
+            const status = await wakeupNativeModule.getWakeupNotificationStatus();
+            if (status) return status;
+        } catch (error) {
+            console.warn("Failed to get wakeup notification status via native module:", error);
+        }
     }
+    // フォールバック: AsyncStorage から読み出し
     try {
-        return await wakeupNativeModule.getWakeupNotificationStatus();
+        const [enabledVal, startHourVal, lastDateVal, titleVal, bodyVal] = await AsyncStorage.multiGet([
+            STORAGE_KEY_WAKEUP_ENABLED,
+            STORAGE_KEY_WAKEUP_START_HOUR,
+            STORAGE_KEY_WAKEUP_LAST_DATE,
+            STORAGE_KEY_WAKEUP_TITLE,
+            STORAGE_KEY_WAKEUP_BODY,
+        ]);
+        return {
+            enabled: enabledVal[1] !== null ? enabledVal[1] === "true" : true,
+            startHour: startHourVal[1] !== null ? parseInt(startHourVal[1], 10) : 6,
+            lastNotifiedDate: lastDateVal[1] || "",
+            cachedTitle: titleVal[1] || "",
+            cachedBody: bodyVal[1] || "",
+        };
     } catch (error) {
-        console.warn("Failed to get wakeup notification status:", error);
-        return null;
+        console.warn("AsyncStorage fallback get error:", error);
+        return {
+            enabled: true,
+            startHour: 6,
+            lastNotifiedDate: "",
+            cachedTitle: "",
+            cachedBody: "",
+        };
     }
 }
+
 

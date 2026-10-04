@@ -1,77 +1,102 @@
 # Android環境整備・自動検証ガイド
 
-本ガイドでは、Android実機およびエミュレータでアプリの動作と通知をスムーズに確認・自動検証するための環境整備手順を解説します。
+Android実機およびエミュレータでの動作・通知確認手順と環境整備ガイド。
 
-## 現状確認できた開発環境
-
-現在のPC環境では、以下のツールが正常に整っています。
+## 開発環境一覧
 
 - **Node.js**: v22.23.1
 - **Java (JDK)**: 17.0.17
-- **Android Debug Bridge (adb)**: 1.0.41 (C:\Users\nano\AppData\Local\Android\Sdk\platform-tools\adb.exe)
+- **Android Debug Bridge (adb)**: 1.0.41 (`C:\Users\nano\AppData\Local\Android\Sdk\platform-tools\adb.exe`)
 - **Android Emulator**: インストール済み
 - **作成済みAVD（仮想端末）**: `Pixel_6_API_36`
 
-## 自動検証をさらに強化するための環境整備
+## Androidエミュレータによる検証
 
-### 案1: Androidエミュレータ（Pixel_6_API_36）のセットアップ（推奨）
+### エミュレータの起動
 
-PC上で画面確認や通知テストを自動実行できるようにする手順です。
-
-#### 1. エミュレータの起動確認
-
-ターミナルまたはPowerShellで以下を実行し、エミュレータを起動します。
+PowerShellで以下を実行して起動。
 
 ```powershell
 & "C:\Users\nano\AppData\Local\Android\Sdk\emulator\emulator.exe" -avd Pixel_6_API_36
 ```
 
-#### 2. Expo Go のインストール
+### 自動検証項目
 
-エミュレータ起動後、Playストアから **「Expo Go」** をインストールします。
-（またはGoogleアカウント未設定の場合、Expoの公式サイトからAPKを直接ダウンロードして `adb install <path-to-apk>` でインストール可能です）
+エミュレータ起動状態で以下の検証が可能。
 
-#### 3. 自動検証ができるようになること
+- `adb` 経由のアプリ自動起動・画面遷移
+- `adb shell screencap -p` によるUI確認
+- `adb logcat` によるランタイムエラー検知
+- 通知センター展開状態の表示確認
 
-エミュレータが起動している状態であれば、エージェント側から以下の自動テストが可能になります。
+## 実機へのインストール手順（スタンドアロン版 APK）
 
-- `adb` 経由でのアプリ自動起動・画面遷移テスト
-- `adb exec-out screencap -p` による画面の自動スクリーンショット取得・UI確認
-- `adb logcat` によるランタイムエラーの自動検知
-- 通知センターを展開した状態のスクリーンショット取得と表示確認
+### 事前準備: リリースAPKのビルド
 
----
+最新コードを反映したAPKパッケージを作成。PowerShellで実行。
 
-### 案2: Android実機での動作確認（プッシュ通知の完全検証に必須）
-
-リモートプッシュ通知（Expo Push Token）は、エミュレータでは制約がある場合があるため、実機での確認が最も確実です。
-
-#### 1. スマホへの Expo Go インストール
-
-AndroidスマートフォンのGoogle Playストアから **「Expo Go」** をインストールします。
-
-#### 2. PCとスマホを同一Wi-Fiに接続
-
-PCとスマートフォンを同じWi-Fiルーター（ローカルネットワーク）に接続します。
-
-#### 3. 開発サーバーの起動
-
-`app` ディレクトリで以下のコマンドを実行します。
-
-```bash
-npm start
+```powershell
+cd D:\Data\projects\software\weather-dashboard\app\android
+.\gradlew.bat assembleRelease
 ```
 
-ターミナルに大きなQRコードが表示されます。
+ビルド完了後のAPK出力先:
+`D:\Data\projects\software\weather-dashboard\app\android\app\build\outputs\apk\release\app-release.apk`
 
-#### 4. アプリの起動
+### USB接続（adb）経由での一発インストール（推奨）
 
-スマートフォンのカメラアプリ、またはExpo Goアプリ内の **「Scan QR code」** からターミナルのQRコードをスキャンします。
-初回ビルドが転送され、スマートフォン上でアプリが起動します。
+PCとAndroidスマートフォンをUSB接続し、USBデバッグが有効な場合の手順。
 
-#### 5. 実機での確認項目
+#### 接続確認
 
-- アプリ起動時に **「通知を許可しますか？」** のダイアログが出るので許可します。
-- 画面上部に実機の **「Expo Push Token」**（`ExponentPushToken[...]`）が表示されます。
-- **「📲 端末にテスト通知を即座に表示」** をタップし、Androidの通知バーに「最高気温・最低気温・前日差・服装・特記事項」がフォーマット通り表示されるか確認します。
-- Cloudflare WorkersのURLを入力し、**「サーバー経由プッシュ通知テスト」** をタップして、外部サーバーからのリモート通知が届くか確認します。
+PowerShellで接続デバイスを確認。
+
+```powershell
+adb devices
+```
+
+一覧に対象端末（例: `c3b95b8a`）が表示されていることを確認。
+
+#### APKの転送・インストール
+
+アプリデータを保持したまま上書きインストール。
+
+```powershell
+# デバイスが1台のみ接続されている場合
+adb install -r "D:\Data\projects\software\weather-dashboard\app\android\app\build\outputs\apk\release\app-release.apk"
+
+# 複数デバイス接続時（デバイスID指定）
+adb -s <デバイスID> install -r "D:\Data\projects\software\weather-dashboard\app\android\app\build\outputs\apk\release\app-release.apk"
+```
+
+### ファイル共有による手動インストール
+
+PCとスマホをUSB接続しない場合の手順。
+
+#### ファイル転送
+
+出力された `app-release.apk` をスマートフォンへ転送。
+
+- Google ドライブや OneDrive などのクラウドストレージ経由
+- USBファイル転送モード（MTP）でダウンロードフォルダへ直接コピー
+- ローカル共有経由
+
+#### 端末でのインストール実行
+
+- スマートフォンの「ファイル」アプリ等から `app-release.apk` を開く。
+- 「提供元不明のアプリ」警告が出た場合、該当ファイル管理アプリからのインストールを許可。
+- 「天気盤」のインストールまたは更新を実行。
+
+### インストール後の推奨設定（通知・バックグラウンド動作の安定化）
+
+Androidの省電力制限による通知遅延を防ぎ、起床連動通知を確実に届けるための設定。
+
+- **通知権限の許可**
+    - 初回起動時の通知許可ダイアログで「許可」を選択。
+- **バッテリー最適化の除外**
+    - ホーム画面の **「天気盤」** アイコンを長押し →「アプリ情報」を開く。
+    - 「バッテリー」または「アプリのバッテリー使用量」を選択。
+    - 「最適化」から **「制限なし」** に変更。
+- **通知のテスト**
+    - アプリ右上のギアアイコンをタップして設定モーダルを開く。
+    - 「通知をテスト」をタップし、ステータスバーに通知が即座に表示されることを確認。

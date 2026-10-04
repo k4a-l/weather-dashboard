@@ -102,12 +102,12 @@ const styles = StyleSheet.create({
 		fontSize: 12,
 		color: "#475569",
 		lineHeight: 20,
+		textAlign: "justify",
 	},
 	expandIconBtn: {
 		alignSelf: "flex-end",
 		paddingTop: 4,
 		paddingBottom: 2,
-		paddingHorizontal: 4,
 	},
 	chevron: {
 		width: 7,
