@@ -1,0 +1,14 @@
+name = "weather-notification-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# 毎朝7:00 (JST = UTC 22:00) に自動実行
+[triggers]
+crons = ["0 22 * * *"]
+
+# 端末のExpo Push Token保存用KVストレージ
+# 本番デプロイ時は wrangler kv namespace create PUSH_TOKENS で作成したIDを設定します
+[[kv_namespaces]]
+binding = "PUSH_TOKENS"
+id = "57bae54ace20449fa6ca062436d03210"
+preview_id = "weather_push_tokens_preview"
