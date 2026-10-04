@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
 	StyleSheet,
 	Text,
@@ -21,6 +21,7 @@ import {
 	requestNotificationPermissionsAsync,
 	getExpoPushTokenAsync,
 	syncWakeupNotificationCacheAsync,
+	getWakeupNotificationStatusAsync,
 } from "./src/services/notification";
 import {
 	TodayComparisonCard,
@@ -38,6 +39,8 @@ import {
 
 export default function App() {
 	const [currentCity, setCurrentCity] = useState<CityConfig>(CITIES[0]);
+	const [isCityInitialized, setIsCityInitialized] = useState<boolean>(false);
+	const activeCityIdRef = useRef<string>(CITIES[0].id);
 	const [weatherData, setWeatherData] =
 		useState<AggregatedWeatherData | null>(null);
 	const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -66,9 +69,10 @@ export default function App() {
 
 			// 前回選択された地点を復元
 			const lastCity = await getLastSelectedCity();
-			if (lastCity) {
-				setCurrentCity(lastCity);
-			}
+			const initialCity = lastCity || CITIES[0];
+			activeCityIdRef.current = initialCity.id;
+			setCurrentCity(initialCity);
+			setIsCityInitialized(true);
 		})();
 	}, []);
 
@@ -78,6 +82,13 @@ export default function App() {
 			console.log("[App] loadWeather start for:", city.name);
 			setErrorMessage(null);
 			const data = await fetchAggregatedWeatherDirect(city);
+
+			// 別地点がすでに選択されていたら古いレスポンスを破棄
+			if (activeCityIdRef.current !== city.id) {
+				console.log("[App] Discarding stale response for:", city.name);
+				return;
+			}
+
 			console.log(
 				"[App] loadWeather received data for:",
 				city.name,
@@ -88,13 +99,14 @@ export default function App() {
 			);
 			setWeatherData(data);
 
-			// ネイティブ側の起床連動通知キャッシュを最新の予報データに更新
+			// ネイティブ側の起床連動通知キャッシュを最新の予報データに更新（既存の設定値を維持）
 			if (data?.notification) {
+				const currentStatus = await getWakeupNotificationStatusAsync();
 				await syncWakeupNotificationCacheAsync(
 					data.notification.title,
 					data.notification.body,
-					6, // 朝6:00以降
-					true,
+					currentStatus?.startHour ?? 6,
+					currentStatus?.enabled ?? true,
 				);
 			}
 		} catch (error: unknown) {
@@ -110,8 +122,10 @@ export default function App() {
 	}, []);
 
 	useEffect(() => {
+		if (!isCityInitialized) return;
+		activeCityIdRef.current = currentCity.id;
 		loadWeather(currentCity);
-	}, [currentCity, loadWeather]);
+	}, [isCityInitialized, currentCity, loadWeather]);
 
 	const onRefresh = useCallback(() => {
 		setIsRefreshing(true);
@@ -119,6 +133,7 @@ export default function App() {
 	}, [currentCity, loadWeather]);
 
 	const handleSaveCity = (newCity: CityConfig) => {
+		activeCityIdRef.current = newCity.id;
 		setCurrentCity(newCity);
 		setIsLoading(true);
 		saveLastSelectedCity(newCity);

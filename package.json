@@ -8,6 +8,8 @@
 	"scripts": {
 		"lint": "oxlint -c oxlint.json app/src app/App.tsx",
 		"lint:fix": "oxlint -c oxlint.json --fix app/src app/App.tsx",
+		"format": "oxfmt app/src app/App.tsx app/index.ts app/metro.config.js app/plugins",
+		"format:check": "oxfmt --check app/src app/App.tsx app/index.ts app/metro.config.js app/plugins",
 		"typecheck:app": "npm run --prefix app typecheck",
 		"start:app": "npm start --workspace=app"
 	},
