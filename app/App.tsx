@@ -100,13 +100,23 @@ export default function App() {
 			setWeatherData(data);
 
 			// ネイティブ側の起床連動通知キャッシュを最新の予報データに更新（既存の設定値を維持）
+			const currentStatus = await getWakeupNotificationStatusAsync();
 			if (data?.notification) {
-				const currentStatus = await getWakeupNotificationStatusAsync();
 				await syncWakeupNotificationCacheAsync(
 					data.notification.title,
 					data.notification.body,
-					currentStatus?.startHour ?? 6,
-					currentStatus?.enabled ?? true,
+					currentStatus?.today?.startHour ?? 6,
+					currentStatus?.today?.enabled ?? true,
+					"today",
+				);
+			}
+			if (data?.tomorrowNotification) {
+				await syncWakeupNotificationCacheAsync(
+					data.tomorrowNotification.title,
+					data.tomorrowNotification.body,
+					currentStatus?.tomorrow?.startHour ?? 18,
+					currentStatus?.tomorrow?.enabled ?? false,
+					"tomorrow",
 				);
 			}
 		} catch (error: unknown) {
@@ -279,6 +289,13 @@ export default function App() {
 				notificationPayload={
 					weatherData?.notification ?? {
 						title: `${currentCity.name}の天気`,
+						body: "最新の気象情報を取得しています",
+						data: { cityId: currentCity.id },
+					}
+				}
+				tomorrowNotificationPayload={
+					weatherData?.tomorrowNotification ?? {
+						title: `【明日の天気】${currentCity.name}`,
 						body: "最新の気象情報を取得しています",
 						data: { cityId: currentCity.id },
 					}

@@ -90,6 +90,8 @@ export interface AggregatedWeatherData {
 	openMeteoJma: ModelForecast;
 	openMeteoEcmwf: ModelForecast;
 	notification: NotificationPayload;
+	tomorrowNotification: NotificationPayload;
 	clothingAdvice: string;
+	tomorrowClothingAdvice: string;
 	generatedAt: string;
 }

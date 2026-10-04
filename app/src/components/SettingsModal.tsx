@@ -25,6 +25,7 @@ interface Props {
 	onOpenLocationModal: () => void;
 	currentCity: CityConfig;
 	notificationPayload: NotificationPayload;
+	tomorrowNotificationPayload?: NotificationPayload;
 	pushToken: string | null;
 }
 
@@ -35,23 +36,40 @@ export const SettingsModal: React.FC<Props> = React.memo(
 		onOpenLocationModal,
 		currentCity,
 		notificationPayload,
+		tomorrowNotificationPayload,
 	}) => {
-		// 起床連動（画面ロック解除）通知の状態
-		const [wakeupEnabled, setWakeupEnabled] = useState(true);
-		const [wakeupStartHour, setWakeupStartHour] = useState<number>(6);
-		const [wakeupStatusText, setWakeupStatusText] = useState("");
+		// 起床連動（画面ロック解除）通知の状態 - 今日
+		const [todayEnabled, setTodayEnabled] = useState(true);
+		const [todayStartHour, setTodayStartHour] = useState<number>(6);
+		const [todayStatusText, setTodayStatusText] = useState("");
+
+		// 起床連動（画面ロック解除）通知の状態 - 明日
+		const [tomorrowEnabled, setTomorrowEnabled] = useState(false);
+		const [tomorrowStartHour, setTomorrowStartHour] = useState<number>(18);
+		const [tomorrowStatusText, setTomorrowStatusText] = useState("");
 
 		// 初期設定の読み込み
 		const loadSettings = useCallback(async () => {
 			const wakeupStatus = await getWakeupNotificationStatusAsync();
 			if (wakeupStatus) {
-				setWakeupEnabled(wakeupStatus.enabled);
-				setWakeupStartHour(wakeupStatus.startHour ?? 6);
 				const todayStr = new Date().toISOString().slice(0, 10);
-				if (wakeupStatus.lastNotifiedDate === todayStr) {
-					setWakeupStatusText("本日配信済み");
+
+				// 今日
+				setTodayEnabled(wakeupStatus.today.enabled);
+				setTodayStartHour(wakeupStatus.today.startHour ?? 6);
+				if (wakeupStatus.today.lastNotifiedDate === todayStr) {
+					setTodayStatusText("本日配信済み");
 				} else {
-					setWakeupStatusText("待機中");
+					setTodayStatusText("待機中");
+				}
+
+				// 明日
+				setTomorrowEnabled(wakeupStatus.tomorrow.enabled);
+				setTomorrowStartHour(wakeupStatus.tomorrow.startHour ?? 18);
+				if (wakeupStatus.tomorrow.lastNotifiedDate === todayStr) {
+					setTomorrowStatusText("本日配信済み");
+				} else {
+					setTomorrowStatusText("待機中");
 				}
 			}
 		}, []);
@@ -71,43 +89,89 @@ export const SettingsModal: React.FC<Props> = React.memo(
 			}
 		};
 
-		// 起床連動通知のON/OFF切り替え
-		const handleToggleWakeup = async (enabled: boolean) => {
-			setWakeupEnabled(enabled);
+		// 今日の通知 ON/OFF
+		const handleToggleToday = async (enabled: boolean) => {
+			setTodayEnabled(enabled);
 			await syncWakeupNotificationCacheAsync(
 				notificationPayload.title,
 				notificationPayload.body,
-				wakeupStartHour,
+				todayStartHour,
 				enabled,
+				"today",
 			);
 			loadSettings();
 		};
 
-		// 起床通知の対象時刻変更
-		const handleChangeStartHour = async (delta: number) => {
-			const newHour = Math.min(10, Math.max(4, wakeupStartHour + delta));
-			setWakeupStartHour(newHour);
+		// 今日の通知 対象時刻変更
+		const handleChangeTodayStartHour = async (delta: number) => {
+			const newHour = Math.min(10, Math.max(4, todayStartHour + delta));
+			setTodayStartHour(newHour);
 			await syncWakeupNotificationCacheAsync(
 				notificationPayload.title,
 				notificationPayload.body,
 				newHour,
-				wakeupEnabled,
+				todayEnabled,
+				"today",
 			);
 			loadSettings();
 		};
 
-		// 配信記録のリセット
-		const handleResetWakeup = async () => {
-			await resetWakeupLastNotifiedDateAsync();
-			Alert.alert("完了", "本日の配信記録をリセットしました。");
+		// 今日の配信記録リセット
+		const handleResetToday = async () => {
+			await resetWakeupLastNotifiedDateAsync("today");
+			Alert.alert("完了", "今日の通知の本日配信記録をリセットしました。");
 			loadSettings();
 		};
 
-		// テスト通知発火
-		const handleTestNotification = async () => {
+		// 明日の通知 ON/OFF
+		const handleToggleTomorrow = async (enabled: boolean) => {
+			setTomorrowEnabled(enabled);
+			const title =
+				tomorrowNotificationPayload?.title || "【明日の天気】";
+			const body = tomorrowNotificationPayload?.body || "明日の予報";
+			await syncWakeupNotificationCacheAsync(
+				title,
+				body,
+				tomorrowStartHour,
+				enabled,
+				"tomorrow",
+			);
+			loadSettings();
+		};
+
+		// 明日の通知 対象時刻変更
+		const handleChangeTomorrowStartHour = async (delta: number) => {
+			const newHour = Math.min(
+				23,
+				Math.max(15, tomorrowStartHour + delta),
+			);
+			setTomorrowStartHour(newHour);
+			const title =
+				tomorrowNotificationPayload?.title || "【明日の天気】";
+			const body = tomorrowNotificationPayload?.body || "明日の予報";
+			await syncWakeupNotificationCacheAsync(
+				title,
+				body,
+				newHour,
+				tomorrowEnabled,
+				"tomorrow",
+			);
+			loadSettings();
+		};
+
+		// 明日の配信記録リセット
+		const handleResetTomorrow = async () => {
+			await resetWakeupLastNotifiedDateAsync("tomorrow");
+			Alert.alert("完了", "明日の通知の本日配信記録をリセットしました。");
+			loadSettings();
+		};
+
+		// 今日のテスト通知発火
+		const handleTestTodayNotification = async () => {
 			try {
-				await resetWakeupLastNotifiedDateAsync();
-				const success = await triggerTestWakeupNotificationAsync();
+				await resetWakeupLastNotifiedDateAsync("today");
+				const success =
+					await triggerTestWakeupNotificationAsync("today");
 				if (!success) {
 					await sendLocalNotificationAsync(notificationPayload);
 				}
@@ -115,7 +179,26 @@ export const SettingsModal: React.FC<Props> = React.memo(
 			} catch (error) {
 				const msg =
 					error instanceof Error ? error.message : String(error);
-				Alert.alert("エラー", `通知テストに失敗しました: ${msg}`);
+				Alert.alert("エラー", `今日通知テストに失敗しました: ${msg}`);
+			}
+		};
+
+		// 明日のテスト通知発火
+		const handleTestTomorrowNotification = async () => {
+			try {
+				await resetWakeupLastNotifiedDateAsync("tomorrow");
+				const success =
+					await triggerTestWakeupNotificationAsync("tomorrow");
+				if (!success && tomorrowNotificationPayload) {
+					await sendLocalNotificationAsync(
+						tomorrowNotificationPayload,
+					);
+				}
+				loadSettings();
+			} catch (error) {
+				const msg =
+					error instanceof Error ? error.message : String(error);
+				Alert.alert("エラー", `明日通知テストに失敗しました: ${msg}`);
 			}
 		};
 
@@ -198,39 +281,39 @@ export const SettingsModal: React.FC<Props> = React.memo(
 									<Text style={styles.actionChevron}>❯</Text>
 								</TouchableOpacity>
 
-								{/* 天気通知 */}
+								{/* 今日の天気通知 */}
 								<View style={styles.settingCard}>
 									<View style={styles.cardHeaderRow}>
 										<View style={styles.cardHeaderInfo}>
 											<Text style={styles.cardTitle}>
-												天気通知
+												今日の天気通知
 											</Text>
-											{!wakeupEnabled && (
+											{!todayEnabled && (
 												<Text
 													style={
 														styles.cardDescription
 													}
 												>
-													指定時刻以降に画面を開いた時にお知らせします
+													朝の指定時刻以降に画面を開いた時にお知らせします
 												</Text>
 											)}
 										</View>
 										<Switch
-											value={wakeupEnabled}
-											onValueChange={handleToggleWakeup}
+											value={todayEnabled}
+											onValueChange={handleToggleToday}
 											trackColor={{
 												false: "#CBD5E1",
 												true: "#93C5FD",
 											}}
 											thumbColor={
-												wakeupEnabled
+												todayEnabled
 													? "#2563EB"
 													: "#F1F5F9"
 											}
 										/>
 									</View>
 
-									{wakeupEnabled && (
+									{todayEnabled && (
 										<View style={styles.cardSubContent}>
 											<View
 												style={styles.inlineSentenceRow}
@@ -243,17 +326,17 @@ export const SettingsModal: React.FC<Props> = React.memo(
 													<TouchableOpacity
 														style={[
 															styles.stepButton,
-															wakeupStartHour <=
+															todayStartHour <=
 																4 &&
 																styles.stepButtonDisabled,
 														]}
 														onPress={() =>
-															handleChangeStartHour(
+															handleChangeTodayStartHour(
 																-1,
 															)
 														}
 														disabled={
-															wakeupStartHour <= 4
+															todayStartHour <= 4
 														}
 													>
 														<Text
@@ -274,24 +357,23 @@ export const SettingsModal: React.FC<Props> = React.memo(
 																styles.stepValueText
 															}
 														>
-															{wakeupStartHour}:00
+															{todayStartHour}:00
 														</Text>
 													</View>
 													<TouchableOpacity
 														style={[
 															styles.stepButton,
-															wakeupStartHour >=
+															todayStartHour >=
 																10 &&
 																styles.stepButtonDisabled,
 														]}
 														onPress={() =>
-															handleChangeStartHour(
+															handleChangeTodayStartHour(
 																1,
 															)
 														}
 														disabled={
-															wakeupStartHour >=
-															10
+															todayStartHour >= 10
 														}
 													>
 														<Text
@@ -313,7 +395,7 @@ export const SettingsModal: React.FC<Props> = React.memo(
 											</View>
 
 											<View style={styles.subRowBetween}>
-												{wakeupStatusText ===
+												{todayStatusText ===
 												"本日配信済み" ? (
 													<View
 														style={
@@ -333,7 +415,167 @@ export const SettingsModal: React.FC<Props> = React.memo(
 												)}
 												<TouchableOpacity
 													style={styles.resetButton}
-													onPress={handleResetWakeup}
+													onPress={handleResetToday}
+													hitSlop={{
+														top: 8,
+														bottom: 8,
+														left: 8,
+														right: 8,
+													}}
+												>
+													<Text
+														style={
+															styles.resetButtonText
+														}
+													>
+														本日の配信記録をリセット
+													</Text>
+												</TouchableOpacity>
+											</View>
+										</View>
+									)}
+								</View>
+
+								{/* 明日の天気通知 */}
+								<View style={styles.settingCard}>
+									<View style={styles.cardHeaderRow}>
+										<View style={styles.cardHeaderInfo}>
+											<Text style={styles.cardTitle}>
+												明日の天気通知
+											</Text>
+											{!tomorrowEnabled && (
+												<Text
+													style={
+														styles.cardDescription
+													}
+												>
+													夕方・夜の指定時刻以降に画面を開いた時にお知らせします
+												</Text>
+											)}
+										</View>
+										<Switch
+											value={tomorrowEnabled}
+											onValueChange={handleToggleTomorrow}
+											trackColor={{
+												false: "#CBD5E1",
+												true: "#93C5FD",
+											}}
+											thumbColor={
+												tomorrowEnabled
+													? "#2563EB"
+													: "#F1F5F9"
+											}
+										/>
+									</View>
+
+									{tomorrowEnabled && (
+										<View style={styles.cardSubContent}>
+											<View
+												style={styles.inlineSentenceRow}
+											>
+												<View
+													style={
+														styles.stepperContainer
+													}
+												>
+													<TouchableOpacity
+														style={[
+															styles.stepButton,
+															tomorrowStartHour <=
+																15 &&
+																styles.stepButtonDisabled,
+														]}
+														onPress={() =>
+															handleChangeTomorrowStartHour(
+																-1,
+															)
+														}
+														disabled={
+															tomorrowStartHour <=
+															15
+														}
+													>
+														<Text
+															style={
+																styles.stepButtonText
+															}
+														>
+															−
+														</Text>
+													</TouchableOpacity>
+													<View
+														style={
+															styles.stepValueBox
+														}
+													>
+														<Text
+															style={
+																styles.stepValueText
+															}
+														>
+															{tomorrowStartHour}
+															:00
+														</Text>
+													</View>
+													<TouchableOpacity
+														style={[
+															styles.stepButton,
+															tomorrowStartHour >=
+																23 &&
+																styles.stepButtonDisabled,
+														]}
+														onPress={() =>
+															handleChangeTomorrowStartHour(
+																1,
+															)
+														}
+														disabled={
+															tomorrowStartHour >=
+															23
+														}
+													>
+														<Text
+															style={
+																styles.stepButtonText
+															}
+														>
+															＋
+														</Text>
+													</TouchableOpacity>
+												</View>
+												<Text
+													style={
+														styles.inlineSentenceText
+													}
+												>
+													以降に画面を開いた時にお知らせ
+												</Text>
+											</View>
+
+											<View style={styles.subRowBetween}>
+												{tomorrowStatusText ===
+												"本日配信済み" ? (
+													<View
+														style={
+															styles.statusBadge
+														}
+													>
+														<Text
+															style={
+																styles.statusBadgeText
+															}
+														>
+															本日配信済み
+														</Text>
+													</View>
+												) : (
+													<View />
+												)}
+												<TouchableOpacity
+													style={styles.resetButton}
+													onPress={
+														handleResetTomorrow
+													}
 													hitSlop={{
 														top: 8,
 														bottom: 8,
@@ -356,14 +598,34 @@ export const SettingsModal: React.FC<Props> = React.memo(
 
 								{/* 動作テスト */}
 								<View style={styles.testSection}>
-									<TouchableOpacity
-										style={styles.testButton}
-										onPress={handleTestNotification}
-									>
-										<Text style={styles.testButtonText}>
-											通知をテスト表示
-										</Text>
-									</TouchableOpacity>
+									<View style={styles.testButtonsRow}>
+										<TouchableOpacity
+											style={[
+												styles.testButton,
+												styles.testButtonFlex,
+											]}
+											onPress={
+												handleTestTodayNotification
+											}
+										>
+											<Text style={styles.testButtonText}>
+												今日通知テスト
+											</Text>
+										</TouchableOpacity>
+										<TouchableOpacity
+											style={[
+												styles.testButton,
+												styles.testButtonFlex,
+											]}
+											onPress={
+												handleTestTomorrowNotification
+											}
+										>
+											<Text style={styles.testButtonText}>
+												明日通知テスト
+											</Text>
+										</TouchableOpacity>
+									</View>
 								</View>
 							</View>
 						</ScrollView>
@@ -642,6 +904,10 @@ const styles = StyleSheet.create({
 	testSection: {
 		marginTop: 4,
 	},
+	testButtonsRow: {
+		flexDirection: "row",
+		gap: 10,
+	},
 	testButton: {
 		backgroundColor: "#FFFFFF",
 		borderWidth: 1,
@@ -650,6 +916,9 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 		alignItems: "center",
 		justifyContent: "center",
+	},
+	testButtonFlex: {
+		flex: 1,
 	},
 	testButtonText: {
 		color: "#334155",

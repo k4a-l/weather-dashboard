@@ -15,6 +15,7 @@ class WakeupNotificationModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun syncWakeupNotificationData(
+        target: String,
         title: String,
         body: String,
         startHour: Double,
@@ -23,12 +24,19 @@ class WakeupNotificationModule(reactContext: ReactApplicationContext) :
     ) {
         try {
             val prefs = reactApplicationContext.getSharedPreferences("WakeupNotificationPrefs", Context.MODE_PRIVATE)
-            prefs.edit()
-                .putString("cachedTitle", title)
-                .putString("cachedBody", body)
-                .putInt("startHour", startHour.toInt())
-                .putBoolean("enabled", enabled)
-                .apply()
+            val editor = prefs.edit()
+            if (target == "tomorrow") {
+                editor.putString("tomorrowCachedTitle", title)
+                    .putString("tomorrowCachedBody", body)
+                    .putInt("tomorrowStartHour", startHour.toInt())
+                    .putBoolean("tomorrowEnabled", enabled)
+            } else {
+                editor.putString("cachedTitle", title)
+                    .putString("cachedBody", body)
+                    .putInt("startHour", startHour.toInt())
+                    .putBoolean("enabled", enabled)
+            }
+            editor.apply()
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("SYNC_ERROR", e.message, e)
@@ -36,10 +44,11 @@ class WakeupNotificationModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun triggerTestWakeupNotification(promise: Promise) {
+    fun triggerTestWakeupNotification(target: String, promise: Promise) {
         try {
             val intent = Intent(reactApplicationContext, WakeupNotificationReceiver::class.java).apply {
                 action = "com.weatherdashboard.app.ACTION_TRIGGER_WAKEUP_TEST"
+                putExtra("target", target)
             }
             reactApplicationContext.sendBroadcast(intent)
             promise.resolve(true)
@@ -49,10 +58,19 @@ class WakeupNotificationModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun resetLastNotifiedDate(promise: Promise) {
+    fun resetLastNotifiedDate(target: String, promise: Promise) {
         try {
             val prefs = reactApplicationContext.getSharedPreferences("WakeupNotificationPrefs", Context.MODE_PRIVATE)
-            prefs.edit().remove("lastNotifiedDate").apply()
+            val editor = prefs.edit()
+            if (target == "tomorrow") {
+                editor.remove("tomorrowLastNotifiedDate")
+            } else if (target == "today") {
+                editor.remove("lastNotifiedDate")
+            } else {
+                editor.remove("lastNotifiedDate")
+                editor.remove("tomorrowLastNotifiedDate")
+            }
+            editor.apply()
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("RESET_ERROR", e.message, e)
@@ -63,7 +81,25 @@ class WakeupNotificationModule(reactContext: ReactApplicationContext) :
     fun getWakeupNotificationStatus(promise: Promise) {
         try {
             val prefs = reactApplicationContext.getSharedPreferences("WakeupNotificationPrefs", Context.MODE_PRIVATE)
+            val todayMap = Arguments.createMap().apply {
+                putBoolean("enabled", prefs.getBoolean("enabled", true))
+                putInt("startHour", prefs.getInt("startHour", 6))
+                putString("lastNotifiedDate", prefs.getString("lastNotifiedDate", "") ?: "")
+                putString("cachedTitle", prefs.getString("cachedTitle", "") ?: "")
+                putString("cachedBody", prefs.getString("cachedBody", "") ?: "")
+            }
+            val tomorrowMap = Arguments.createMap().apply {
+                putBoolean("enabled", prefs.getBoolean("tomorrowEnabled", false))
+                putInt("startHour", prefs.getInt("tomorrowStartHour", 18))
+                putString("lastNotifiedDate", prefs.getString("tomorrowLastNotifiedDate", "") ?: "")
+                putString("cachedTitle", prefs.getString("tomorrowCachedTitle", "") ?: "")
+                putString("cachedBody", prefs.getString("tomorrowCachedBody", "") ?: "")
+            }
+
             val result = Arguments.createMap().apply {
+                putMap("today", todayMap)
+                putMap("tomorrow", tomorrowMap)
+                // 既存コード互換フィールド
                 putBoolean("enabled", prefs.getBoolean("enabled", true))
                 putInt("startHour", prefs.getInt("startHour", 6))
                 putString("lastNotifiedDate", prefs.getString("lastNotifiedDate", "") ?: "")

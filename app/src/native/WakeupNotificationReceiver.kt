@@ -27,45 +27,61 @@ class WakeupNotificationReceiver : BroadcastReceiver() {
         }
 
         val prefs = context.getSharedPreferences("WakeupNotificationPrefs", Context.MODE_PRIVATE)
-        val enabled = prefs.getBoolean("enabled", true)
-        if (!enabled) {
-            android.util.Log.d("WakeupNotification", "Notification is disabled in settings")
-            return
-        }
-
-        val startHour = prefs.getInt("startHour", 6)
         val isTest = action == "com.weatherdashboard.app.ACTION_TRIGGER_WAKEUP_TEST"
+        val testTarget = intent.getStringExtra("target") ?: "today"
 
         val cal = Calendar.getInstance()
         val currentHour = cal.get(Calendar.HOUR_OF_DAY)
         val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
-        val lastNotifiedDate = prefs.getString("lastNotifiedDate", "")
-        android.util.Log.d("WakeupNotification", "check: currentHour=$currentHour, startHour=$startHour, lastNotified=$lastNotifiedDate, today=$todayStr, isTest=$isTest")
+        // 1. 今日の天気通知 (ID: 1001)
+        val todayEnabled = prefs.getBoolean("enabled", true)
+        val todayStartHour = prefs.getInt("startHour", 6)
+        val todayLastNotified = prefs.getString("lastNotifiedDate", "")
 
-        if (!isTest) {
-            if (currentHour < startHour) {
-                android.util.Log.d("WakeupNotification", "Skipping: before startHour ($currentHour < $startHour)")
-                return
-            }
-            if (lastNotifiedDate == todayStr) {
-                android.util.Log.d("WakeupNotification", "Skipping: already notified today ($todayStr)")
-                return
-            }
+        val shouldNotifyToday = if (isTest) {
+            testTarget == "today" || testTarget == "all"
+        } else {
+            todayEnabled && currentHour >= todayStartHour && todayLastNotified != todayStr
         }
 
-        val title = prefs.getString("cachedTitle", "【今日の天気予報】") ?: "【今日の天気予報】"
-        val body = prefs.getString(
-            "cachedBody",
-            "最新の天気予報を確認しましょう。アプリを開いて詳細をご覧ください。"
-        ) ?: "最新の天気予報を確認しましょう。"
+        if (shouldNotifyToday) {
+            val title = prefs.getString("cachedTitle", "【今日の天気予報】") ?: "【今日の天気予報】"
+            val body = prefs.getString(
+                "cachedBody",
+                "最新の天気予報を確認しましょう。アプリを開いて詳細をご覧ください。"
+            ) ?: "最新の天気予報を確認しましょう。"
 
-        showNotification(context, title, body)
-        prefs.edit().putString("lastNotifiedDate", todayStr).apply()
-        android.util.Log.d("WakeupNotification", "Notification posted successfully. lastNotifiedDate set to $todayStr")
+            showNotification(context, title, body, 1001)
+            prefs.edit().putString("lastNotifiedDate", todayStr).apply()
+            android.util.Log.d("WakeupNotification", "Today notification posted. lastNotifiedDate set to $todayStr")
+        }
+
+        // 2. 明日の天気通知 (ID: 1002)
+        val tomorrowEnabled = prefs.getBoolean("tomorrowEnabled", false)
+        val tomorrowStartHour = prefs.getInt("tomorrowStartHour", 18)
+        val tomorrowLastNotified = prefs.getString("tomorrowLastNotifiedDate", "")
+
+        val shouldNotifyTomorrow = if (isTest) {
+            testTarget == "tomorrow" || testTarget == "all"
+        } else {
+            tomorrowEnabled && currentHour >= tomorrowStartHour && tomorrowLastNotified != todayStr
+        }
+
+        if (shouldNotifyTomorrow) {
+            val title = prefs.getString("tomorrowCachedTitle", "【明日の天気予報】") ?: "【明日の天気予報】"
+            val body = prefs.getString(
+                "tomorrowCachedBody",
+                "明日の天気予報を確認しましょう。アプリを開いて詳細をご覧ください。"
+            ) ?: "明日の天気予報を確認しましょう。"
+
+            showNotification(context, title, body, 1002)
+            prefs.edit().putString("tomorrowLastNotifiedDate", todayStr).apply()
+            android.util.Log.d("WakeupNotification", "Tomorrow notification posted. tomorrowLastNotifiedDate set to $todayStr")
+        }
     }
 
-    private fun showNotification(context: Context, title: String, body: String) {
+    private fun showNotification(context: Context, title: String, body: String, notificationId: Int) {
         val channelId = "weather-alerts"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -89,7 +105,7 @@ class WakeupNotificationReceiver : BroadcastReceiver() {
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
-            0,
+            notificationId,
             launchIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -107,7 +123,6 @@ class WakeupNotificationReceiver : BroadcastReceiver() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
 
-        val notificationId = 1001
         try {
             NotificationManagerCompat.from(context).notify(notificationId, builder.build())
         } catch (e: SecurityException) {

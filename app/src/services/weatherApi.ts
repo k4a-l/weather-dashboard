@@ -738,12 +738,33 @@ export async function fetchAggregatedWeatherDirect(
 		bodyLines.push(`注意報: ${cleanAlerts}`);
 	}
 
+	// 明日の通知ペイロード生成
+	const tomWeather = jma.tomorrowWeather || openMeteoJma.tomorrowWeatherText;
+	const tomPop = openMeteoJma.tomorrowPopMax;
+	const tomMaxTemp = openMeteoJma.tomorrowMaxTemp;
+	const tomMinTemp = openMeteoJma.tomorrowMinTemp;
+	const tomMaxDiff = openMeteoJma.tomorrowMaxTempDiff;
+	const tomMinDiff = openMeteoJma.tomorrowMinTempDiff;
+	const rawTomAdvice = getClothingAdvice(tomMaxTemp, tomMinTemp, tomMaxDiff);
+	const tomorrowClothingAdvice = rawTomAdvice
+		? rawTomAdvice.replace(/^[\p{Emoji}\s]+/u, "")
+		: "";
+
+	const tomTitle = `【${city.name} 明日】${tomWeather}・降水 ${tomPop}%`;
+	const tomBodyLines: string[] = [
+		`${formatTemperature(tomMaxTemp)} (今日比 ${formatDiff(tomMaxDiff)}) / ${formatTemperature(tomMinTemp)} (今日比 ${formatDiff(tomMinDiff)})`,
+	];
+	if (tomorrowClothingAdvice) {
+		tomBodyLines.push(`${tomorrowClothingAdvice}`);
+	}
+
 	return {
 		city,
 		jma,
 		openMeteoJma,
 		openMeteoEcmwf,
 		clothingAdvice,
+		tomorrowClothingAdvice,
 		notification: {
 			title,
 			body: bodyLines.join("\n"),
@@ -755,6 +776,20 @@ export async function fetchAggregatedWeatherDirect(
 				maxDiff,
 				minDiff,
 				pop,
+			},
+		},
+		tomorrowNotification: {
+			title: tomTitle,
+			body: tomBodyLines.join("\n"),
+			data: {
+				cityId: city.id,
+				cityName: city.name,
+				maxTemp: tomMaxTemp,
+				minTemp: tomMinTemp,
+				maxDiff: tomMaxDiff,
+				minDiff: tomMinDiff,
+				pop: tomPop,
+				target: "tomorrow",
 			},
 		},
 		generatedAt: new Date().toISOString(),

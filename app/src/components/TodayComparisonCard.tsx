@@ -17,6 +17,126 @@ interface Props {
 	onSelectModel: (model: WeatherModelId) => void;
 }
 
+interface DayWeatherDisplay {
+	icon: string;
+	weatherText: string;
+	maxTemp: number;
+	minTemp: number;
+	maxDiff: number;
+	minDiff: number;
+	popText: string;
+	precipText: string;
+	apparentMaxTemp?: number;
+	apparentMinTemp?: number;
+	maxDiffVsJma?: number;
+	minDiffVsJma?: number;
+}
+
+function resolveDayDisplayData(
+	day: "today" | "tomorrow",
+	model: WeatherModelId,
+	jma: JmaForecastData,
+	openMeteoJma: ModelForecast,
+	openMeteoEcmwf: ModelForecast,
+): DayWeatherDisplay {
+	const isToday = day === "today";
+	const activeModel =
+		model === "openMeteoEcmwf" ? openMeteoEcmwf : openMeteoJma;
+
+	const apparentMaxTemp = isToday
+		? activeModel.todayApparentMaxTemp
+		: activeModel.tomorrowApparentMaxTemp;
+	const apparentMinTemp = isToday
+		? activeModel.todayApparentMinTemp
+		: activeModel.tomorrowApparentMinTemp;
+
+	const jmaMax = isToday ? jma.todayMaxTemp : jma.tomorrowMaxTemp;
+	const jmaMin = isToday ? jma.todayMinTemp : jma.tomorrowMinTemp;
+	const omJmaMax = isToday
+		? openMeteoJma.maxTemp
+		: openMeteoJma.tomorrowMaxTemp;
+	const omJmaMin = isToday
+		? openMeteoJma.minTemp
+		: openMeteoJma.tomorrowMinTemp;
+
+	const baselineMax = jmaMax ?? omJmaMax;
+	let baselineMin = jmaMin ?? omJmaMin;
+	if (baselineMin === baselineMax && omJmaMin !== baselineMax) {
+		baselineMin = omJmaMin;
+	}
+
+	if (model === "jmaOfficial") {
+		const rawWeather = isToday
+			? jma.todayWeather
+			: jma.tomorrowWeather || "くもり";
+		const pops = isToday ? jma.todayPops : jma.tomorrowPops || [];
+		const fallbackPop = isToday
+			? openMeteoJma.popMax
+			: openMeteoJma.tomorrowPopMax;
+		const popText =
+			pops.length > 0 ? `${pops[pops.length - 1]}%` : `${fallbackPop}%`;
+		const precip = isToday
+			? openMeteoJma.precipitationSum
+			: openMeteoJma.tomorrowPrecipitationSum;
+
+		return {
+			icon: getWeatherIcon(rawWeather),
+			weatherText: rawWeather,
+			maxTemp: baselineMax,
+			minTemp: baselineMin,
+			maxDiff: isToday
+				? openMeteoJma.maxTempDiff
+				: openMeteoJma.tomorrowMaxTempDiff,
+			minDiff: isToday
+				? openMeteoJma.minTempDiff
+				: openMeteoJma.tomorrowMinTempDiff,
+			popText,
+			precipText: precip !== undefined ? `${precip}mm` : "0mm",
+			apparentMaxTemp,
+			apparentMinTemp,
+		};
+	}
+
+	const targetModel =
+		model === "openMeteoJma" ? openMeteoJma : openMeteoEcmwf;
+	const weatherCode = isToday
+		? targetModel.todayWeatherCode
+		: targetModel.tomorrowWeatherCode;
+	const weatherText = isToday
+		? targetModel.todayWeatherText
+		: targetModel.tomorrowWeatherText;
+	const maxTemp = isToday ? targetModel.maxTemp : targetModel.tomorrowMaxTemp;
+	const minTemp = isToday ? targetModel.minTemp : targetModel.tomorrowMinTemp;
+	const maxDiff = isToday
+		? targetModel.maxTempDiff
+		: targetModel.tomorrowMaxTempDiff;
+	const minDiff = isToday
+		? targetModel.minTempDiff
+		: targetModel.tomorrowMinTempDiff;
+	const pop = isToday ? targetModel.popMax : targetModel.tomorrowPopMax;
+	const precip = isToday
+		? targetModel.precipitationSum
+		: targetModel.tomorrowPrecipitationSum;
+
+	const maxDiffVsJma = Math.round((maxTemp - baselineMax) * 10) / 10;
+	const minDiffVsJma = Math.round((minTemp - baselineMin) * 10) / 10;
+
+	return {
+		icon: getWeatherIcon(weatherCode),
+		weatherText,
+		maxTemp,
+		minTemp,
+		maxDiff,
+		minDiff,
+		popText: `${pop}%`,
+		precipText: `${precip ?? 0}mm`,
+		apparentMaxTemp,
+		apparentMinTemp,
+		maxDiffVsJma,
+		minDiffVsJma,
+	};
+}
+
 export const TodayComparisonCard: React.FC<Props> = React.memo(
 	({
 		jma,
@@ -32,165 +152,28 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 			? clothingAdvice.replace(/^[\p{Emoji}\s]+/u, "")
 			: "";
 
+		const today = resolveDayDisplayData(
+			"today",
+			selectedModel,
+			jma,
+			openMeteoJma,
+			openMeteoEcmwf,
+		);
+		const tomorrow = resolveDayDisplayData(
+			"tomorrow",
+			selectedModel,
+			jma,
+			openMeteoJma,
+			openMeteoEcmwf,
+		);
+
 		const isToday = selectedDay === "today";
-		const diffPrefix = isToday ? "前日比" : "今日比";
-
-		// 体感温度（最高／最低）
-		const activeModel =
-			selectedModel === "openMeteoEcmwf" ? openMeteoEcmwf : openMeteoJma;
-		const apparentMaxTemp = isToday
-			? activeModel.todayApparentMaxTemp
-			: activeModel.tomorrowApparentMaxTemp;
-		const apparentMinTemp = isToday
-			? activeModel.todayApparentMinTemp
-			: activeModel.tomorrowApparentMinTemp;
-
-		// 選択されたモデルと日時に応じた値の解決
-		let weatherIcon = "";
-		let weatherText = "";
-		let maxTemp = 20;
-		let minTemp = 15;
-		let maxDiff = 0;
-		let minDiff = 0;
-		let popText = "0%";
-		let precipText = "0mm";
-		let maxDiffVsJma: number | undefined;
-		let minDiffVsJma: number | undefined;
-
-		if (isToday) {
-			const baselineMax = jma.todayMaxTemp ?? openMeteoJma.maxTemp;
-			let baselineMin = jma.todayMinTemp ?? openMeteoJma.minTemp;
-			if (
-				baselineMin === baselineMax &&
-				openMeteoJma.minTemp !== baselineMax
-			) {
-				baselineMin = openMeteoJma.minTemp;
-			}
-
-			if (selectedModel === "jmaOfficial") {
-				weatherIcon = getWeatherIcon(jma.todayWeather);
-				weatherText = jma.todayWeather;
-				maxTemp = baselineMax;
-				minTemp = baselineMin;
-				maxDiff = openMeteoJma.maxTempDiff;
-				minDiff = openMeteoJma.minTempDiff;
-				popText =
-					jma.todayPops.length > 0
-						? `${jma.todayPops[jma.todayPops.length - 1]}%`
-						: `${openMeteoJma.popMax}%`;
-				precipText =
-					openMeteoJma.precipitationSum !== undefined
-						? `${openMeteoJma.precipitationSum}mm`
-						: "0mm";
-			} else if (selectedModel === "openMeteoJma") {
-				weatherIcon = getWeatherIcon(openMeteoJma.todayWeatherCode);
-				weatherText = openMeteoJma.todayWeatherText;
-				maxTemp = openMeteoJma.maxTemp;
-				minTemp = openMeteoJma.minTemp;
-				maxDiff = openMeteoJma.maxTempDiff;
-				minDiff = openMeteoJma.minTempDiff;
-				popText = `${openMeteoJma.popMax}%`;
-				precipText = `${openMeteoJma.precipitationSum ?? 0}mm`;
-				if (jma.todayMaxTemp !== undefined) {
-					maxDiffVsJma =
-						Math.round(
-							(openMeteoJma.maxTemp - jma.todayMaxTemp) * 10,
-						) / 10;
-				}
-				if (jma.todayMinTemp !== undefined) {
-					minDiffVsJma =
-						Math.round(
-							(openMeteoJma.minTemp - jma.todayMinTemp) * 10,
-						) / 10;
-				}
-			} else {
-				weatherIcon = getWeatherIcon(openMeteoEcmwf.todayWeatherCode);
-				weatherText = openMeteoEcmwf.todayWeatherText;
-				maxTemp = openMeteoEcmwf.maxTemp;
-				minTemp = openMeteoEcmwf.minTemp;
-				maxDiff = openMeteoEcmwf.maxTempDiff;
-				minDiff = openMeteoEcmwf.minTempDiff;
-				popText = `${openMeteoEcmwf.popMax}%`;
-				precipText = `${openMeteoEcmwf.precipitationSum ?? 0}mm`;
-				maxDiffVsJma =
-					Math.round((openMeteoEcmwf.maxTemp - baselineMax) * 10) /
-					10;
-				minDiffVsJma =
-					Math.round((openMeteoEcmwf.minTemp - baselineMin) * 10) /
-					10;
-			}
-		} else {
-			// 明日
-			const baselineTomMax =
-				jma.tomorrowMaxTemp ?? openMeteoJma.tomorrowMaxTemp;
-			let baselineTomMin =
-				jma.tomorrowMinTemp ?? openMeteoJma.tomorrowMinTemp;
-			if (
-				baselineTomMin === baselineTomMax &&
-				openMeteoJma.tomorrowMinTemp !== baselineTomMax
-			) {
-				baselineTomMin = openMeteoJma.tomorrowMinTemp;
-			}
-
-			if (selectedModel === "jmaOfficial") {
-				const jmaTomWeather = jma.tomorrowWeather || "くもり";
-				weatherIcon = getWeatherIcon(jmaTomWeather);
-				weatherText = jmaTomWeather;
-				maxTemp = baselineTomMax;
-				minTemp = baselineTomMin;
-				maxDiff = openMeteoJma.tomorrowMaxTempDiff;
-				minDiff = openMeteoJma.tomorrowMinTempDiff;
-				popText =
-					jma.tomorrowPops && jma.tomorrowPops.length > 0
-						? `${jma.tomorrowPops[0]}%`
-						: `${openMeteoJma.tomorrowPopMax}%`;
-				precipText =
-					openMeteoJma.tomorrowPrecipitationSum !== undefined
-						? `${openMeteoJma.tomorrowPrecipitationSum}mm`
-						: "0mm";
-			} else if (selectedModel === "openMeteoJma") {
-				weatherIcon = getWeatherIcon(openMeteoJma.tomorrowWeatherCode);
-				weatherText = openMeteoJma.tomorrowWeatherText;
-				maxTemp = openMeteoJma.tomorrowMaxTemp;
-				minTemp = openMeteoJma.tomorrowMinTemp;
-				maxDiff = openMeteoJma.tomorrowMaxTempDiff;
-				minDiff = openMeteoJma.tomorrowMinTempDiff;
-				popText = `${openMeteoJma.tomorrowPopMax}%`;
-				precipText = `${openMeteoJma.tomorrowPrecipitationSum ?? 0}mm`;
-				maxDiffVsJma =
-					Math.round(
-						(openMeteoJma.tomorrowMaxTemp - baselineTomMax) * 10,
-					) / 10;
-				minDiffVsJma =
-					Math.round(
-						(openMeteoJma.tomorrowMinTemp - baselineTomMin) * 10,
-					) / 10;
-			} else {
-				weatherIcon = getWeatherIcon(
-					openMeteoEcmwf.tomorrowWeatherCode,
-				);
-				weatherText = openMeteoEcmwf.tomorrowWeatherText;
-				maxTemp = openMeteoEcmwf.tomorrowMaxTemp;
-				minTemp = openMeteoEcmwf.tomorrowMinTemp;
-				maxDiff = openMeteoEcmwf.tomorrowMaxTempDiff;
-				minDiff = openMeteoEcmwf.tomorrowMinTempDiff;
-				popText = `${openMeteoEcmwf.tomorrowPopMax}%`;
-				precipText = `${openMeteoEcmwf.tomorrowPrecipitationSum ?? 0}mm`;
-				maxDiffVsJma =
-					Math.round(
-						(openMeteoEcmwf.tomorrowMaxTemp - baselineTomMax) * 10,
-					) / 10;
-				minDiffVsJma =
-					Math.round(
-						(openMeteoEcmwf.tomorrowMinTemp - baselineTomMin) * 10,
-					) / 10;
-			}
-		}
+		const active = isToday ? today : tomorrow;
 
 		const formatDiff = (diff: number, prefix: string) => {
-			if (diff > 0) return `${prefix} +${diff.toFixed(1)}°`;
-			if (diff < 0) return `${prefix} ${diff.toFixed(1)}°`;
-			return `${prefix} ±0°`;
+			if (diff > 0) return `${prefix}+${diff.toFixed(1)}°`;
+			if (diff < 0) return `${prefix}${diff.toFixed(1)}°`;
+			return `${prefix}±0°`;
 		};
 
 		const diffColor = (diff: number) => {
@@ -201,50 +184,9 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 
 		return (
 			<Section style={styles.sectionContainer}>
-				{/* 日付切り替え & 予報モデル切り替え */}
-				<View style={styles.selectorsRow}>
-					{/* 今日 | 明日 */}
-					<View style={styles.daySelector}>
-						<Pressable
-							style={[
-								styles.dayTab,
-								selectedDay === "today" && styles.dayTabActive,
-							]}
-							onPress={() => onSelectDay("today")}
-							hitSlop={6}
-						>
-							<Text
-								style={[
-									styles.dayTabText,
-									selectedDay === "today" &&
-										styles.dayTabTextActive,
-								]}
-							>
-								今日
-							</Text>
-						</Pressable>
-						<Pressable
-							style={[
-								styles.dayTab,
-								selectedDay === "tomorrow" &&
-									styles.dayTabActive,
-							]}
-							onPress={() => onSelectDay("tomorrow")}
-							hitSlop={6}
-						>
-							<Text
-								style={[
-									styles.dayTabText,
-									selectedDay === "tomorrow" &&
-										styles.dayTabTextActive,
-								]}
-							>
-								明日
-							</Text>
-						</Pressable>
-					</View>
-
-					{/* モデル切り替えピル */}
+				{/* 上部: 予報モデル切り替えピル */}
+				<View style={styles.headerRow}>
+					<Text style={styles.headerTitle}>天気予報</Text>
 					<View style={styles.modelSelector}>
 						<Pressable
 							style={[
@@ -306,108 +248,213 @@ export const TodayComparisonCard: React.FC<Props> = React.memo(
 					</View>
 				</View>
 
-				{/* メイン天気サマリー */}
-				<View style={styles.heroRow}>
-					{/* 天気アイコンとテキスト */}
-					<View style={styles.weatherInfoCol}>
-						<View style={styles.iconTitleRow}>
-							<Text style={styles.heroIcon}>{weatherIcon}</Text>
-							<Text
-								style={styles.heroWeatherText}
-								numberOfLines={2}
-							>
-								{weatherText}
-							</Text>
-						</View>
-
-						<View style={styles.precipRow}>
-							<Text style={styles.precipStat}>
-								降水 {popText}
-							</Text>
-							<Text style={styles.precipDivider}>・</Text>
-							<Text style={styles.precipStat}>
-								雨量 {precipText}
-							</Text>
-						</View>
-					</View>
-
-					{/* 気温表示（最高・最低 双方の差分および体感） */}
-					<View style={styles.tempBlock}>
-						<View style={styles.tempCol}>
-							<Text style={styles.tempSubLabel}>最高</Text>
-							<Text style={styles.heroMaxTemp}>
-								{maxTemp.toFixed(1)}°
-							</Text>
-							{apparentMaxTemp !== undefined && (
-								<Text style={styles.apparentTempSub}>
-									体感 {apparentMaxTemp.toFixed(1)}°
-								</Text>
-							)}
-							<Text
+				{/* 今日 ＆ 明日 2大統合カード（トグルボタン） */}
+				<View style={styles.dualCardsRow}>
+					{/* 今日カード */}
+					<Pressable
+						style={[
+							styles.dayCard,
+							isToday
+								? styles.dayCardActive
+								: styles.dayCardInactive,
+						]}
+						onPress={() => onSelectDay("today")}
+					>
+						<View style={styles.cardTopRow}>
+							<View
 								style={[
-									styles.diffText,
-									{ color: diffColor(maxDiff) },
+									styles.dayBadge,
+									isToday && styles.dayBadgeActive,
 								]}
 							>
-								{formatDiff(maxDiff, diffPrefix)}
-							</Text>
+								<Text
+									style={[
+										styles.dayBadgeText,
+										isToday && styles.dayBadgeTextActive,
+									]}
+								>
+									今日
+								</Text>
+							</View>
+							{isToday && (
+								<View style={styles.selectedIndicator}>
+									<Text style={styles.selectedIndicatorText}>
+										選択中
+									</Text>
+								</View>
+							)}
 						</View>
 
-						<View style={styles.tempSeparator} />
-
-						<View style={styles.tempCol}>
-							<Text style={styles.tempSubLabel}>最低</Text>
-							<Text style={styles.heroMinTemp}>
-								{minTemp.toFixed(1)}°
+						<View style={styles.cardCenterRow}>
+							<Text style={styles.cardWeatherIcon}>
+								{today.icon}
 							</Text>
-							{apparentMinTemp !== undefined && (
-								<Text style={styles.apparentTempSub}>
-									体感 {apparentMinTemp.toFixed(1)}°
+							<View style={styles.cardTempGroup}>
+								<View style={styles.cardTempRow}>
+									<Text style={styles.cardMaxTemp}>
+										{today.maxTemp.toFixed(1)}°
+									</Text>
+									<Text style={styles.cardTempSlash}>/</Text>
+									<Text style={styles.cardMinTemp}>
+										{today.minTemp.toFixed(1)}°
+									</Text>
+								</View>
+								<Text
+									style={[
+										styles.cardDiffText,
+										{ color: diffColor(today.maxDiff) },
+									]}
+								>
+									前日比 高{formatDiff(today.maxDiff, "")} 低
+									{formatDiff(today.minDiff, "")}
 								</Text>
-							)}
-							<Text
+							</View>
+						</View>
+
+						<View style={styles.cardBottomRow}>
+							<Text style={styles.cardPrecipStat}>
+								☂ {today.popText}
+							</Text>
+							<Text style={styles.cardPrecipDivider}>・</Text>
+							<Text style={styles.cardPrecipStat}>
+								{today.precipText}
+							</Text>
+						</View>
+					</Pressable>
+
+					{/* 明日カード */}
+					<Pressable
+						style={[
+							styles.dayCard,
+							!isToday
+								? styles.dayCardActive
+								: styles.dayCardInactive,
+						]}
+						onPress={() => onSelectDay("tomorrow")}
+					>
+						<View style={styles.cardTopRow}>
+							<View
 								style={[
-									styles.diffText,
-									{ color: diffColor(minDiff) },
+									styles.dayBadge,
+									!isToday && styles.dayBadgeActive,
 								]}
 							>
-								{formatDiff(minDiff, diffPrefix)}
+								<Text
+									style={[
+										styles.dayBadgeText,
+										!isToday && styles.dayBadgeTextActive,
+									]}
+								>
+									明日
+								</Text>
+							</View>
+							{!isToday && (
+								<View style={styles.selectedIndicator}>
+									<Text style={styles.selectedIndicatorText}>
+										選択中
+									</Text>
+								</View>
+							)}
+						</View>
+
+						<View style={styles.cardCenterRow}>
+							<Text style={styles.cardWeatherIcon}>
+								{tomorrow.icon}
+							</Text>
+							<View style={styles.cardTempGroup}>
+								<View style={styles.cardTempRow}>
+									<Text style={styles.cardMaxTemp}>
+										{tomorrow.maxTemp.toFixed(1)}°
+									</Text>
+									<Text style={styles.cardTempSlash}>/</Text>
+									<Text style={styles.cardMinTemp}>
+										{tomorrow.minTemp.toFixed(1)}°
+									</Text>
+								</View>
+								<Text
+									style={[
+										styles.cardDiffText,
+										{ color: diffColor(tomorrow.maxDiff) },
+									]}
+								>
+									今日比 高{formatDiff(tomorrow.maxDiff, "")}{" "}
+									低{formatDiff(tomorrow.minDiff, "")}
+								</Text>
+							</View>
+						</View>
+
+						<View style={styles.cardBottomRow}>
+							<Text style={styles.cardPrecipStat}>
+								☂ {tomorrow.popText}
+							</Text>
+							<Text style={styles.cardPrecipDivider}>・</Text>
+							<Text style={styles.cardPrecipStat}>
+								{tomorrow.precipText}
 							</Text>
 						</View>
-					</View>
+					</Pressable>
 				</View>
 
-				{/* 気象庁公式との差異注記（モデル選択時） */}
-				{maxDiffVsJma !== undefined && minDiffVsJma !== undefined && (
-					<View style={styles.modelDiffRow}>
-						<Text style={styles.modelDiffLabel}>気象庁公式比</Text>
-						<Text
-							style={[
-								styles.modelDiffVal,
-								{ color: diffColor(maxDiffVsJma) },
-							]}
-						>
-							最高 {formatDiff(maxDiffVsJma, "")}
+				{/* 共通詳細エリア（選択中日の概況文言・体感・公式比・服装目安） */}
+				<View style={styles.sharedDetailArea}>
+					{/* 天気概況文言（小さめ） */}
+					<View style={styles.weatherSummaryRow}>
+						<Text style={styles.summaryIcon}>{active.icon}</Text>
+						<Text style={styles.summaryText} numberOfLines={2}>
+							{active.weatherText}
 						</Text>
-						<Text style={styles.modelDiffDivider}>/</Text>
-						<Text
-							style={[
-								styles.modelDiffVal,
-								{ color: diffColor(minDiffVsJma) },
-							]}
-						>
-							最低 {formatDiff(minDiffVsJma, "")}
-						</Text>
+						{active.apparentMaxTemp !== undefined &&
+							active.apparentMinTemp !== undefined && (
+								<Text style={styles.apparentTempTag}>
+									体感 {active.apparentMaxTemp.toFixed(1)}° /{" "}
+									{active.apparentMinTemp.toFixed(1)}°
+								</Text>
+							)}
 					</View>
-				)}
 
-				{/* 服装目安 */}
-				{cleanAdvice ? (
-					<View style={styles.adviceRow}>
-						<Text style={styles.adviceLabel}>服装目安</Text>
-						<Text style={styles.adviceText}>{cleanAdvice}</Text>
-					</View>
-				) : null}
+					{/* 気象庁公式との差異注記（モデル選択時） */}
+					{active.maxDiffVsJma !== undefined &&
+						active.minDiffVsJma !== undefined && (
+							<View style={styles.modelDiffRow}>
+								<Text style={styles.modelDiffLabel}>
+									気象庁公式比
+								</Text>
+								<Text
+									style={[
+										styles.modelDiffVal,
+										{
+											color: diffColor(
+												active.maxDiffVsJma,
+											),
+										},
+									]}
+								>
+									最高 {formatDiff(active.maxDiffVsJma, "")}
+								</Text>
+								<Text style={styles.modelDiffDivider}>/</Text>
+								<Text
+									style={[
+										styles.modelDiffVal,
+										{
+											color: diffColor(
+												active.minDiffVsJma,
+											),
+										},
+									]}
+								>
+									最低 {formatDiff(active.minDiffVsJma, "")}
+								</Text>
+							</View>
+						)}
+
+					{/* 服装目安 */}
+					{cleanAdvice ? (
+						<View style={styles.adviceRow}>
+							<Text style={styles.adviceLabel}>服装目安</Text>
+							<Text style={styles.adviceText}>{cleanAdvice}</Text>
+						</View>
+					) : null}
+				</View>
 			</Section>
 		);
 	},
@@ -418,40 +465,16 @@ const styles = StyleSheet.create({
 		paddingTop: 12,
 		paddingBottom: 14,
 	},
-	selectorsRow: {
+	headerRow: {
 		flexDirection: "row",
 		justifyContent: "space-between",
 		alignItems: "center",
-		marginBottom: 14,
-		gap: 8,
+		marginBottom: 12,
 	},
-	daySelector: {
-		flexDirection: "row",
-		backgroundColor: "#F1F5F9",
-		borderRadius: 8,
-		padding: 2,
-	},
-	dayTab: {
-		paddingHorizontal: 12,
-		paddingVertical: 5,
-		borderRadius: 6,
-	},
-	dayTabActive: {
-		backgroundColor: "#FFFFFF",
-		shadowColor: "#000",
-		shadowOffset: { width: 0, height: 1 },
-		shadowOpacity: 0.06,
-		shadowRadius: 2,
-		elevation: 1,
-	},
-	dayTabText: {
-		fontSize: 12,
-		fontWeight: "600",
-		color: "#64748B",
-	},
-	dayTabTextActive: {
-		color: "#0F172A",
+	headerTitle: {
+		fontSize: 14,
 		fontWeight: "700",
+		color: "#0F172A",
 	},
 	modelSelector: {
 		flexDirection: "row",
@@ -459,7 +482,7 @@ const styles = StyleSheet.create({
 	},
 	modelPill: {
 		paddingHorizontal: 8,
-		paddingVertical: 5,
+		paddingVertical: 4,
 		borderRadius: 6,
 		backgroundColor: "#F8FAFC",
 		borderWidth: 1,
@@ -477,98 +500,161 @@ const styles = StyleSheet.create({
 	modelPillTextActive: {
 		color: "#FFFFFF",
 	},
-	heroRow: {
+	dualCardsRow: {
 		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		gap: 12,
+		gap: 10,
 	},
-	weatherInfoCol: {
+	dayCard: {
 		flex: 1,
+		borderRadius: 14,
+		padding: 12,
+		borderWidth: 2,
 	},
-	iconTitleRow: {
+	dayCardActive: {
+		backgroundColor: "#F0F7FF",
+		borderColor: "#2563EB",
+		shadowColor: "#2563EB",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.12,
+		shadowRadius: 6,
+		elevation: 3,
+	},
+	dayCardInactive: {
+		backgroundColor: "#F8FAFC",
+		borderColor: "#E2E8F0",
+		opacity: 0.85,
+	},
+	cardTopRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+		marginBottom: 8,
+	},
+	dayBadge: {
+		paddingHorizontal: 8,
+		paddingVertical: 2,
+		borderRadius: 6,
+		backgroundColor: "#E2E8F0",
+	},
+	dayBadgeActive: {
+		backgroundColor: "#2563EB",
+	},
+	dayBadgeText: {
+		fontSize: 12,
+		fontWeight: "700",
+		color: "#475569",
+	},
+	dayBadgeTextActive: {
+		color: "#FFFFFF",
+	},
+	selectedIndicator: {
+		backgroundColor: "#DBEAFE",
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 4,
+	},
+	selectedIndicatorText: {
+		fontSize: 10,
+		fontWeight: "700",
+		color: "#1D4ED8",
+	},
+	cardCenterRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
+		marginVertical: 4,
 	},
-	heroIcon: {
+	cardWeatherIcon: {
 		fontSize: 34,
 	},
-	heroWeatherText: {
+	cardTempGroup: {
 		flex: 1,
-		fontSize: 16,
-		fontWeight: "700",
-		color: "#0F172A",
-		lineHeight: 22,
 	},
-	precipRow: {
+	cardTempRow: {
+		flexDirection: "row",
+		alignItems: "baseline",
+		gap: 3,
+	},
+	cardMaxTemp: {
+		fontSize: 18,
+		fontWeight: "800",
+		color: "#E11D48",
+	},
+	cardTempSlash: {
+		fontSize: 13,
+		color: "#94A3B8",
+		fontWeight: "500",
+	},
+	cardMinTemp: {
+		fontSize: 16,
+		fontWeight: "800",
+		color: "#2563EB",
+	},
+	cardDiffText: {
+		fontSize: 9.5,
+		fontWeight: "700",
+		marginTop: 1,
+	},
+	cardBottomRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 4,
 		marginTop: 6,
+		paddingTop: 6,
+		borderTopWidth: 1,
+		borderTopColor: "rgba(226, 232, 240, 0.7)",
 	},
-	precipStat: {
-		fontSize: 12,
-		color: "#64748B",
-		fontWeight: "500",
+	cardPrecipStat: {
+		fontSize: 11,
+		fontWeight: "600",
+		color: "#475569",
 	},
-	precipDivider: {
-		fontSize: 10,
+	cardPrecipDivider: {
+		fontSize: 9,
 		color: "#CBD5E1",
 	},
-	tempBlock: {
+	sharedDetailArea: {
+		marginTop: 12,
+		backgroundColor: "#F8FAFC",
+		borderRadius: 10,
+		padding: 10,
+		borderWidth: 1,
+		borderColor: "#E2E8F0",
+		gap: 8,
+	},
+	weatherSummaryRow: {
 		flexDirection: "row",
 		alignItems: "center",
-		gap: 12,
-		paddingVertical: 4,
-		paddingHorizontal: 8,
-		borderRadius: 10,
-		backgroundColor: "#F8FAFC",
+		gap: 6,
+		flexWrap: "wrap",
 	},
-	tempCol: {
-		alignItems: "center",
-		minWidth: 54,
+	summaryIcon: {
+		fontSize: 15,
 	},
-	tempSubLabel: {
-		fontSize: 10,
-		color: "#94A3B8",
+	summaryText: {
+		fontSize: 12.5,
 		fontWeight: "600",
-		marginBottom: 1,
+		color: "#334155",
+		lineHeight: 17,
 	},
-	heroMaxTemp: {
-		fontSize: 22,
-		fontWeight: "800",
-		color: "#E11D48",
-		letterSpacing: -0.5,
-	},
-	heroMinTemp: {
-		fontSize: 22,
-		fontWeight: "800",
-		color: "#2563EB",
-		letterSpacing: -0.5,
-	},
-	tempSeparator: {
-		width: 1,
-		height: 44,
-		backgroundColor: "#E2E8F0",
-	},
-	apparentTempSub: {
-		fontSize: 10,
+	apparentTempTag: {
+		fontSize: 11,
+		fontWeight: "600",
 		color: "#64748B",
-		fontWeight: "500",
-		marginTop: 1,
-	},
-	diffText: {
-		fontSize: 10,
-		fontWeight: "700",
-		marginTop: 2,
+		backgroundColor: "#FFFFFF",
+		paddingHorizontal: 6,
+		paddingVertical: 2,
+		borderRadius: 4,
+		borderWidth: 1,
+		borderColor: "#E2E8F0",
 	},
 	modelDiffRow: {
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 6,
-		marginTop: 8,
-		paddingHorizontal: 2,
+		paddingTop: 6,
+		borderTopWidth: 1,
+		borderTopColor: "#E2E8F0",
 	},
 	modelDiffLabel: {
 		fontSize: 10,
@@ -587,17 +673,20 @@ const styles = StyleSheet.create({
 		flexDirection: "row",
 		alignItems: "center",
 		gap: 8,
-		marginTop: 10,
-		paddingHorizontal: 2,
+		paddingTop: 6,
+		borderTopWidth: 1,
+		borderTopColor: "#E2E8F0",
 	},
 	adviceLabel: {
 		fontSize: 11,
 		fontWeight: "600",
 		color: "#475569",
-		backgroundColor: "#F1F5F9",
+		backgroundColor: "#FFFFFF",
 		paddingHorizontal: 6,
 		paddingVertical: 2,
 		borderRadius: 4,
+		borderWidth: 1,
+		borderColor: "#E2E8F0",
 	},
 	adviceText: {
 		flex: 1,
